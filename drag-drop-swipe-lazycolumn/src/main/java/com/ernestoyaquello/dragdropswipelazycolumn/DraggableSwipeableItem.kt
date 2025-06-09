@@ -32,6 +32,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.zIndex
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.All
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.None
+import com.ernestoyaquello.dragdropswipelazycolumn.config.DraggableSwipeableItemColors
+import com.ernestoyaquello.dragdropswipelazycolumn.config.DraggableSwipeableItemDefaults
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemDefaults
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemIcons
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemShapes
+import com.ernestoyaquello.dragdropswipelazycolumn.state.DraggableSwipeableItemState
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -41,7 +48,42 @@ import kotlin.math.roundToInt
  * To make an element within the item (e.g., a drag icon) able to start the dragging,
  * you must assign it the modifier dragDropModifier().
  *
- * This item MUST be used as the root item content's Composable within a [DragDropSwipeLazyColumn].
+ * This item must be used as the root composable for the item content of [DragDropSwipeLazyColumn].
+ *
+ * @param modifier The [Modifier] to be applied to the item.
+ * @param colors The colors to be used for the item.
+ * @param shapes The shapes to be used for the item.
+ * @param icons The icons to be used for the item.
+ * @param minHeight The minimum height of the item.
+ * @param minSwipeHorizontality The minimum horizontal delta to vertical delta ratio required for a
+ *  horizontal swipe gesture to be considered a valid swipe start. The higher this value, the more
+ *  "horizontal" the swipe gesture must be for it to be actually handled as a swipe. A `null` means
+ *  no minimum horizontality for a horizontal swipe to be considered as such.
+ * @param allowedSwipeDirections The allowed swipe directions for the item.
+ * @param dragDropEnabled Indicates whether the drag-and-drop functionality is enabled for the item.
+ * @param applyShadowElevationWhenDragged Indicates whether a shadow elevation should be applied to
+ *  the item while it is being dragged.
+ * @param shadowElevationWhenDragged The shadow elevation to be applied to the item while it is
+ *  being dragged. It will only be applied if [applyShadowElevationWhenDragged] is set to `true`.
+ * @param clickIndication The click indication to be applied to the item when it is clicked. It will
+ *  only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
+ *  dragged or swiped.
+ * @param onClick The callback to be invoked when the item is clicked. It will only be invoked if
+ *  the item is not being dragged or swiped.
+ * @param onLongClick The callback to be invoked when the item is long-clicked. It will only be
+ *  invoked if the item is not being dragged or swiped.
+ * @param onDragStart The callback to be invoked when the user starts dragging the item.
+ * @param onDragUpdate The callback to be invoked when the user is dragging the item and a drag
+ *  delta in pixels is detected, meaning that the user has dragged the item by some amount.
+ * @param onDragFinish The callback to be invoked when the user finishes dragging the item.
+ * @param onSwipeGestureStart The callback to be invoked when the user starts swiping the item.
+ * @param onSwipeGestureUpdate The callback to be invoked when the user is swiping the item and a
+ *  swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
+ * @param onSwipeGestureFinish The callback to be invoked when the user finishes swiping the item.
+ * @param onSwipeDismiss The callback to be invoked when the user swipes the item far enough and/or
+ *  fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
+ *  will be provided as a parameter.
+ * @param content The content of the item.
  */
 @Composable
 fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
@@ -72,7 +114,7 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
     itemState.swipeableItemState.update {
         copy(
             allowedSwipeDirections = allowedSwipeDirections,
-            forceDisableSwipe = listState.draggedItemKey != null,
+            forceDisableSwipe = listState.draggedItemKey != null || allowedSwipeDirections == None,
         )
     }
 
@@ -90,17 +132,13 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
     }
     val shadowScaleX = remember(widthInPx, containerHorizontalPaddingInPx) {
         if (widthInPx > 0f) {
-            (widthInPx - (containerHorizontalPaddingInPx * 2f)) / widthInPx
+            (widthInPx - containerHorizontalPaddingInPx) / widthInPx
         } else {
             1f
         }
     }
     val animatedShadowElevation by animateDpAsState(
-        targetValue = when {
-            itemState.isBeingDragged -> shadowElevationWhenDragged
-            itemState.animatedOffsetInPx.value != 0f -> shadowElevationWhenDragged * 0.5f
-            else -> 0.dp
-        },
+        targetValue = if (itemState.isBeingDragged) shadowElevationWhenDragged else 0.dp,
     )
     val animatedContainerBackgroundColor by animateColorAsState(
         targetValue = if (itemState.isBeingDragged) {

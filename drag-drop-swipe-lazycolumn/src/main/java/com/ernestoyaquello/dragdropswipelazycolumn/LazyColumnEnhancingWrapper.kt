@@ -1,6 +1,5 @@
 package com.ernestoyaquello.dragdropswipelazycolumn
 
-import android.content.res.Configuration
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring.DampingRatioLowBouncy
 import androidx.compose.animation.core.Spring.DampingRatioNoBouncy
@@ -8,7 +7,6 @@ import androidx.compose.animation.core.Spring.StiffnessMedium
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,17 +15,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,9 +36,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemShapes
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.MultiPreview
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.ThemedPreview
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.rememberPreviewViewModel
+import com.ernestoyaquello.dragdropswipelazycolumn.state.rememberDragDropSwipeLazyColumnState
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
@@ -58,8 +55,8 @@ import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
 /**
- * A wrapper for a lazy column that will enhance it with item reveal animations and automatic
- * scrolling to the last item when it is added to the list.
+ * A wrapper for a [LazyColumn] or a [DragDropSwipeLazyColumn] that will enhance it with item reveal
+ * animations and automatic scrolling to the last item when it is added to the list.
  *
  * The reason why this even exists, apart from allowing us to improve the default item addition
  * animations with some extra customization, such as a slide-in animation, is that the default
@@ -69,19 +66,20 @@ import kotlin.math.roundToInt
  * layout, but that brings its own issues, hence this seemingly overcomplicated wrapper.
  *
  * To see how the wrapper is expected to be used and how it works, please refer to the previews
- * implemented below, which are expected to be run to be fully understood.
+ * implemented below – they are expected to be run to be fully understood, as this composable
+ * focuses on animations, etc.
  *
- * NOTE: This wrapper isn't perfectly generic, flexible, and battle-tested, and it might not behave
- * correctly in certain scenarios, such as when multiple items are added to the bottom of the list
- * at once, or when the layout is reversed. It should work fine in most cases though, but please
- * only use it at your own risk!
+ * NOTE: This wrapper isn't perfectly generic or flexible, and it might not behave correctly in
+ * certain scenarios, such as when multiple items are added to the bottom of the list at once, or
+ * when the layout is reversed. It should work fine in most cases though, but please only use it at
+ * your own risk!
  *
  * @param modifier The [Modifier] that will be apply to the list.
  * @param state The [LazyListState] of the underlying lazy column.
  * @param items The items to be displayed within the lazy column.
  * @param key A function that returns a unique key for each item.
- * @param content The composable with the list, which will be provided with a "listModifier" and a
- *   "getItemModifier()". These modifiers MUST be used for the enhancements to work.
+ * @param content The composable with the list, which will be provided with a "content.listModifier"
+ *  and a "content.getItemModifier()". These modifiers must be used for the enhancements to work.
  */
 @Composable
 fun <TItem> LazyColumnEnhancingWrapper(
@@ -239,112 +237,55 @@ fun <TItem> LazyColumnEnhancingWrapper(
 }
 
 @Composable
-@Preview(name = "A (Default)")
-@Preview(name = "B (Dark theme)", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "C (Bigger font)", fontScale = 1.75f)
-private fun LazyColumnEnhancingWrapper_LazyColumn_InteractivePreview() {
-    val viewModel by remember { mutableStateOf(DragDropSwipeLazyColumnPreviewViewModel(5)) }
+@MultiPreview
+private fun LazyColumnEnhancingWrapper_InteractivePreview() {
+    val viewModel = rememberPreviewViewModel()
     val state by viewModel.state.collectAsState()
 
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-    ) {
+    ThemedPreview {
         Scaffold(
             modifier = Modifier.background(MaterialTheme.colorScheme.background),
             floatingActionButton = {
                 AddNewItemFloatingActionButton(viewModel::addNewItem)
             },
-        ) { paddingValues ->
-            // This state must be passed down both to the list wrapper and to the list!
-            val listState = rememberLazyListState()
+        ) { innerPadding ->
+            state.items?.let { items ->
+                // This state must be passed down both to the list wrapper and to the list!
+                val listState = rememberDragDropSwipeLazyColumnState()
 
-            LazyColumnEnhancingWrapper(
-                modifier = Modifier.padding(paddingValues),
-                state = listState,
-                items = state.items,
-                key = remember { { it.id } },
-            ) { listModifier, getItemModifier ->
-                LazyColumn(
-                    modifier = listModifier.fillMaxSize(),
-                    state = listState,
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    itemsIndexed(
-                        items = state.items,
-                        key = { _, item -> item.id },
+                LazyColumnEnhancingWrapper(
+                    modifier = Modifier.padding(innerPadding),
+                    state = listState.lazyListState,
+                    items = items,
+                    key = remember { { it.id } },
+                ) { listModifier, getItemModifier ->
+                    // We are using a DragDropSwipeLazyColumn, but it could just be a LazyColumn
+                    DragDropSwipeLazyColumn(
+                        modifier = listModifier.fillMaxSize(),
+                        state = listState,
+                        items = items,
+                        key = remember { { it.id } },
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        onIndicesChangedViaDragAndDrop = viewModel::onReorderedItems,
                     ) { index, item ->
                         val itemModifier = getItemModifier(index, item)
-                        Text(
-                            modifier = itemModifier
-                                .fillMaxWidth()
-                                .animateItem()
-                                .background(
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = MaterialTheme.shapes.medium,
-                                )
-                                .padding(16.dp),
-                            text = item.title,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-@Preview(name = "A (Default)")
-@Preview(name = "B (Dark theme)", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "C (Bigger font)", fontScale = 1.75f)
-private fun LazyColumnEnhancingWrapper_DragDropSwipeLazyColumn_InteractivePreview() {
-    val viewModel by remember { mutableStateOf(DragDropSwipeLazyColumnPreviewViewModel(5)) }
-    val state by viewModel.state.collectAsState()
-
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-    ) {
-        Scaffold(
-            modifier = Modifier.background(MaterialTheme.colorScheme.background),
-            floatingActionButton = {
-                AddNewItemFloatingActionButton(viewModel::addNewItem)
-            },
-        ) { paddingValues ->
-            // This state must be passed down both to the list wrapper and to the list!
-            val listState = rememberDragDropSwipeLazyColumnState()
-
-            LazyColumnEnhancingWrapper(
-                modifier = Modifier.padding(paddingValues),
-                state = listState.lazyListState,
-                items = state.items,
-                key = remember { { it.id } },
-            ) { listModifier, getItemModifier ->
-                DragDropSwipeLazyColumn(
-                    modifier = listModifier.fillMaxSize(),
-                    state = listState,
-                    items = state.items,
-                    key = remember { { it.id } },
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    onIndicesChangedViaDragAndDrop = viewModel::onReorderedItems,
-                ) { index, item ->
-                    val itemModifier = getItemModifier(index, item)
-                    DraggableSwipeableItem(
-                        modifier = itemModifier.animateDraggableSwipeableItem(),
-                        shapes = SwipeableItemShapes.createRemembered(
-                            containersBackgroundShape = MaterialTheme.shapes.medium,
-                        ),
-                        minHeight = 60.dp,
-                        onClick = { viewModel.onItemClick(item) },
-                        onSwipeDismiss = { viewModel.onItemSwipeDismiss(item = item) },
-                    ) {
-                        PreviewDraggableItemLayout(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            item = item,
-                        )
+                        DraggableSwipeableItem(
+                            modifier = itemModifier.animateDraggableSwipeableItem(),
+                            shapes = SwipeableItemShapes.createRemembered(
+                                containersBackgroundShape = MaterialTheme.shapes.medium,
+                            ),
+                            minHeight = 60.dp,
+                            onClick = { viewModel.onItemClick(item) },
+                            onSwipeDismiss = { viewModel.onItemSwipeDismiss(item = item) },
+                        ) {
+                            PreviewDraggableItemLayout(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                item = item,
+                            )
+                        }
                     }
                 }
             }

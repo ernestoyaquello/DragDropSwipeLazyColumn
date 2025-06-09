@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ernestoyaquello.dragdropswipelazycolumn"
+    namespace = "com.ernestoyaquello.dragdropswipelazycolumn.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.ernestoyaquello.dragdropswipelazycolumn"
+        applicationId = "com.ernestoyaquello.dragdropswipelazycolumn.app"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -40,6 +40,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.collections.immutable)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -47,6 +48,10 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.appcompat)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.activity.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(project(":drag-drop-swipe-lazycolumn"))

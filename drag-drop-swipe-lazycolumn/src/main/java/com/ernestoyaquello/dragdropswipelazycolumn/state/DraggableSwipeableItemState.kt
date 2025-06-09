@@ -1,4 +1,4 @@
-package com.ernestoyaquello.dragdropswipelazycolumn
+package com.ernestoyaquello.dragdropswipelazycolumn.state
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter

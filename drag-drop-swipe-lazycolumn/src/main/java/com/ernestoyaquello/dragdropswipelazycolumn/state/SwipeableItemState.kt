@@ -1,12 +1,19 @@
-package com.ernestoyaquello.dragdropswipelazycolumn
+package com.ernestoyaquello.dragdropswipelazycolumn.state
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.*
-import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection.*
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.All
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.None
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.OnlyLeftToRight
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.OnlyRightToLeft
+import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection
+import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection.NotSwiping
+import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection.SwipingLeftToRight
+import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection.SwipingRightToLeft
 
 @Stable
 class SwipeableItemState internal constructor(

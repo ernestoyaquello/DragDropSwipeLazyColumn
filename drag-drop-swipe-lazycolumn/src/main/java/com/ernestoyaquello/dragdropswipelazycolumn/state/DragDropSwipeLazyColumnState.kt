@@ -1,4 +1,4 @@
-package com.ernestoyaquello.dragdropswipelazycolumn
+package com.ernestoyaquello.dragdropswipelazycolumn.state
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState

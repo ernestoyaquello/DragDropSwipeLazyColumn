@@ -1,6 +1,5 @@
 package com.ernestoyaquello.dragdropswipelazycolumn
 
-import android.content.res.Configuration
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -18,7 +17,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -33,15 +31,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -69,7 +65,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -81,9 +76,21 @@ import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.All
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.None
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.OnlyLeftToRight
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.OnlyRightToLeft
+import com.ernestoyaquello.dragdropswipelazycolumn.DismissSwipeDirection.LeftToRight
+import com.ernestoyaquello.dragdropswipelazycolumn.DismissSwipeDirection.RightToLeft
+import com.ernestoyaquello.dragdropswipelazycolumn.DismissSwipeDirectionLayoutAdjusted.EndToStart
+import com.ernestoyaquello.dragdropswipelazycolumn.DismissSwipeDirectionLayoutAdjusted.StartToEnd
 import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection.NotSwiping
 import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection.SwipingLeftToRight
 import com.ernestoyaquello.dragdropswipelazycolumn.OngoingSwipeDirection.SwipingRightToLeft
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemColors
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemDefaults
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemIcons
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemShapes
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.MultiPreview
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.ThemedPreview
+import com.ernestoyaquello.dragdropswipelazycolumn.state.SwipeableItemState
+import com.ernestoyaquello.dragdropswipelazycolumn.state.rememberSwipeableItemState
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.absoluteValue
@@ -95,6 +102,34 @@ import kotlin.math.sign
  * When the item is swiped successfully, [onSwipeDismiss] will be invoked.
  *
  * You can see an example of how to use this component in the preview at the bottom of this file.
+ *
+ * @param modifier The [Modifier] to be applied to the item.
+ * @param state The [SwipeableItemState] that will be used to control the item.
+ * @param colors The [SwipeableItemColors] that will be used to style the item.
+ * @param shapes The [SwipeableItemShapes] that will be used to style the item.
+ * @param icons The [SwipeableItemIcons] that will be displayed behind the item during swiping.
+ * @param minHeight The minimum height of the item.
+ * @param contentStartPadding The padding to be applied at the start of the item content.
+ * @param contentEndPadding The padding to be applied at the end of the item content.
+ * @param minSwipeHorizontality The minimum horizontal delta to vertical delta ratio required for a
+ *  horizontal swipe gesture to be considered a valid swipe start. The higher this value, the more
+ *  "horizontal" the swipe gesture must be for it to be actually handled as a swipe. A `null` means
+ *  no minimum horizontality for a horizontal swipe to be considered as such.
+ * @param clickIndication The click indication to be applied to the item when it is clicked. It will
+ *  only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
+ *  swiped.
+ * @param onClick The callback to be invoked when the item is clicked. It will only be invoked if
+ *  the item is not being swiped.
+ * @param onLongClick The callback to be invoked when the item is long-clicked. It will only be
+ *  invoked if the item is not being swiped.
+ * @param onSwipeGestureStart The callback to be invoked when the user starts swiping the item.
+ * @param onSwipeGestureUpdate The callback to be invoked when the user is swiping the item and a
+ *  swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
+ * @param onSwipeGestureFinish The callback to be invoked when the user finishes swiping the item.
+ * @param onSwipeDismiss The callback to be invoked when the user swipes the item far enough and/or
+ *  fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
+ *  will be provided as a parameter.
+ * @param content The content of the item.
  */
 @Composable
 fun SwipeableItem(
@@ -387,8 +422,8 @@ private fun ApplySwipeOffsetIfNeeded(
             // Lastly, we might need to invoke the callback to notify that the item was dismissed
             if (isItemDismissedOrBeingDismissed) {
                 val dismissDirection = when {
-                    swipeOffsetTargetInPx > 0f -> DismissSwipeDirection.LeftToRight
-                    swipeOffsetTargetInPx < 0f -> DismissSwipeDirection.RightToLeft
+                    swipeOffsetTargetInPx > 0f -> LeftToRight
+                    swipeOffsetTargetInPx < 0f -> RightToLeft
                     else -> null // This should never happen, but just in case?
                 }
                 dismissDirection?.let { onDismissedViaSwiping(it) }
@@ -520,12 +555,20 @@ private suspend fun PointerInputScope.handleTapGestures(
 ) {
     detectTapGestures(
         onPress = { offset ->
-            val press = PressInteraction.Press(offset)
-            clickInteractionSource.emit(press)
-            if (tryAwaitRelease()) {
-                clickInteractionSource.emit(PressInteraction.Release(press))
-            } else {
-                clickInteractionSource.emit(PressInteraction.Cancel(press))
+            if (onClick != null || onLongClick != null) {
+                // Delay to avoid the ripple effect being shown when the item is being swiped.
+                // This isn't perfect, and it makes the tap gesture feel a bit delayed, but I
+                // am not sure how to do it better.
+                // FIXME Do this better
+                delay(50)
+
+                val press = PressInteraction.Press(offset)
+                clickInteractionSource.emit(press)
+                if (tryAwaitRelease()) {
+                    clickInteractionSource.emit(PressInteraction.Release(press))
+                } else {
+                    clickInteractionSource.emit(PressInteraction.Cancel(press))
+                }
             }
         },
         onTap = onClick?.let { { it() } },
@@ -709,19 +752,35 @@ enum class DismissSwipeDirection {
     RightToLeft,
 }
 
+@Immutable
+enum class DismissSwipeDirectionLayoutAdjusted {
+    StartToEnd,
+    EndToStart,
+}
+
 @Composable
-@Preview(name = "A (Default)")
-@Preview(name = "B (Dark theme)", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "C (Bigger font)", fontScale = 1.75f)
+fun DismissSwipeDirection.toLayoutAdjustedDirection() = toLayoutAdjustedDirection(
+    layoutDirection = LocalLayoutDirection.current,
+)
+
+fun DismissSwipeDirection.toLayoutAdjustedDirection(
+    layoutDirection: LayoutDirection,
+): DismissSwipeDirectionLayoutAdjusted {
+    return when (this) {
+        LeftToRight -> if (layoutDirection == Ltr) StartToEnd else EndToStart
+        RightToLeft -> if (layoutDirection == Ltr) EndToStart else StartToEnd
+    }
+}
+
+@Composable
+@MultiPreview
 private fun SwipeableItem_InteractivePreview_Basic() {
     val swipeState = rememberSwipeableItemState()
     var numberOfClicks by remember { mutableIntStateOf(0) }
     var numberOfLongClicks by remember { mutableIntStateOf(0) }
     var numberOfSwipes by remember { mutableIntStateOf(0) }
 
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-    ) {
+    ThemedPreview {
         SwipeableItem(
             state = swipeState,
             onClick = { numberOfClicks++ },
@@ -747,19 +806,16 @@ private fun SwipeableItem_InteractivePreview_Basic() {
 }
 
 @Composable
-@Preview(name = "A (Default)")
-@Preview(name = "B (Dark theme)", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "C (Bigger font)", fontScale = 1.75f)
+@MultiPreview
 private fun SwipeableItem_InteractivePreview_Customized() {
     val swipeState = rememberSwipeableItemState()
     var numberOfClicks by remember { mutableIntStateOf(0) }
     var numberOfLongClicks by remember { mutableIntStateOf(0) }
     var numberOfDeleted by remember { mutableIntStateOf(0) }
-    var numberOfLocked by remember { mutableIntStateOf(0) }
+    var numberOfFavorited by remember { mutableIntStateOf(0) }
 
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-    ) {
+    ThemedPreview {
+        val layoutDirection = LocalLayoutDirection.current
         SwipeableItem(
             modifier = Modifier
                 .background(color = MaterialTheme.colorScheme.background)
@@ -768,32 +824,32 @@ private fun SwipeableItem_InteractivePreview_Customized() {
             minHeight = 60.dp,
             contentStartPadding = 16.dp,
             contentEndPadding = 16.dp,
-            colors = SwipeableItemColors.createRemembered(
+            colors = SwipeableItemColors.createRememberedWithLayoutDirection(
                 containerBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
-                behindLeftToRightSwipeContainerBackgroundColor = Color.Red,
-                behindLeftToRightSwipeIconColor = Color.White,
-                behindRightToLeftSwipeContainerBackgroundColor = Color.Yellow,
-                behindRightToLeftSwipeIconColor = Color.Black,
+                behindStartToEndSwipeContainerBackgroundColor = Color.Yellow,
+                behindStartToEndSwipeIconColor = Color.Black,
+                behindEndToStartSwipeContainerBackgroundColor = Color.Red,
+                behindEndToStartSwipeIconColor = Color.White,
             ),
-            shapes = SwipeableItemShapes.createRemembered(
+            shapes = SwipeableItemShapes.createRememberedWithLayoutDirection(
                 containerBackgroundShape = MaterialTheme.shapes.extraSmall,
-                behindLeftToRightSwipeContainerShape = MaterialTheme.shapes.medium,
-                behindRightToLeftSwipeContainerShape = CircleShape,
+                behindStartToEndSwipeContainerShape = CircleShape,
+                behindEndToStartSwipeContainerShape = MaterialTheme.shapes.medium,
             ),
-            icons = SwipeableItemIcons.createRemembered(
-                behindLeftToRightSwipeIconSwipeStarting = Icons.Outlined.Delete,
-                behindLeftToRightSwipeIconSwipeOngoing = Icons.Filled.Delete,
-                behindLeftToRightSwipeIconSwipeFinishing = Icons.Filled.Clear,
-                behindRightToLeftSwipeIconSwipeStarting = Icons.Outlined.Lock,
-                behindRightToLeftSwipeIconSwipeOngoing = Icons.Filled.Lock,
-                behindRightToLeftSwipeIconSwipeFinishing = Icons.Filled.Done,
+            icons = SwipeableItemIcons.createRememberedWithLayoutDirection(
+                behindStartToEndSwipeIconSwipeStarting = Icons.Outlined.FavoriteBorder,
+                behindStartToEndSwipeIconSwipeOngoing = Icons.Filled.Favorite,
+                behindStartToEndSwipeIconSwipeFinishing = Icons.Filled.Done,
+                behindEndToStartSwipeIconSwipeStarting = Icons.Outlined.Delete,
+                behindEndToStartSwipeIconSwipeOngoing = Icons.Filled.Delete,
+                behindEndToStartSwipeIconSwipeFinishing = Icons.Filled.Clear,
             ),
             onClick = { numberOfClicks++ },
             onLongClick = { numberOfLongClicks++ },
             onSwipeDismiss = { dismissDirection ->
-                when (dismissDirection) {
-                    DismissSwipeDirection.LeftToRight -> numberOfDeleted++
-                    DismissSwipeDirection.RightToLeft -> numberOfLocked++
+                when (dismissDirection.toLayoutAdjustedDirection((layoutDirection))) {
+                    StartToEnd -> numberOfFavorited++
+                    EndToStart -> numberOfDeleted++
                 }
             },
         ) {
@@ -801,12 +857,12 @@ private fun SwipeableItem_InteractivePreview_Customized() {
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                textData = "(deletions: $numberOfDeleted, locked: $numberOfLocked, clicks: $numberOfClicks, long clicks: $numberOfLongClicks)",
+                textData = "(deletions: $numberOfDeleted, favorited: $numberOfFavorited, clicks: $numberOfClicks, long clicks: $numberOfLongClicks)",
             )
         }
 
-        if (numberOfDeleted > 0 || numberOfLocked > 0) {
-            LaunchedEffect(numberOfDeleted + numberOfLocked) {
+        if (numberOfDeleted > 0 || numberOfFavorited > 0) {
+            LaunchedEffect(numberOfDeleted + numberOfFavorited) {
                 // Reset after a while so we can keep clicking, swiping, etc
                 delay(300)
                 swipeState.reset()

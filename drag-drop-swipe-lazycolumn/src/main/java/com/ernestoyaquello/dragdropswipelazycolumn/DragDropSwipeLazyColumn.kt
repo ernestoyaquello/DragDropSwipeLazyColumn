@@ -1,6 +1,7 @@
 package com.ernestoyaquello.dragdropswipelazycolumn
 
-import android.content.res.Configuration
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
@@ -11,8 +12,8 @@ import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -23,8 +24,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.rememberOverscrollEffect
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
@@ -34,11 +37,8 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
@@ -50,20 +50,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.All
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.None
+import com.ernestoyaquello.dragdropswipelazycolumn.DismissSwipeDirectionLayoutAdjusted.StartToEnd
+import com.ernestoyaquello.dragdropswipelazycolumn.config.DraggableSwipeableItemColors
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemIcons
+import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemShapes
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.MultiPreview
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.PreviewItem
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.ThemedPreview
+import com.ernestoyaquello.dragdropswipelazycolumn.preview.rememberPreviewViewModel
+import com.ernestoyaquello.dragdropswipelazycolumn.state.DragDropSwipeLazyColumnState
+import com.ernestoyaquello.dragdropswipelazycolumn.state.DraggableSwipeableItemState
+import com.ernestoyaquello.dragdropswipelazycolumn.state.rememberDragDropSwipeLazyColumnState
+import com.ernestoyaquello.dragdropswipelazycolumn.state.rememberSwipeableItemState
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -78,9 +86,47 @@ import kotlin.time.Duration.Companion.nanoseconds
 /**
  * A lazy column with drag-and-drop reordering, as well swipe-to-dismiss functionality.
  * Once an item has been dropped, [onIndicesChangedViaDragAndDrop] will be invoked.
- * Note that for everything to work, the [itemContentIndexed] MUST be a [DraggableSwipeableItem].
+ * Note that for everything to work, the [itemContentIndexed] must be implemented using a
+ * [DraggableSwipeableItem] as the only root composable.
  *
  * You can see an example of how to use this component in the preview at the bottom of this file.
+ *
+ * @param modifier The [Modifier] instance to apply to this layout.
+ * @param state The state object of type [DragDropSwipeLazyColumnState] to be used to control or
+ *  observe the list's state.
+ * @param items The items to be displayed in the list.
+ * @param key A factory of stable and unique keys representing each item.
+ *  Using the same key for multiple items in the list is not allowed.
+ *  The type of the key should be saveable via Bundle on Android.
+ *  The scroll position will be maintained based on the item key, which means if you add/remove
+ *  items before the current visible item, the item with the given key will be kept as the first
+ *  visible one. This can be overridden by calling [LazyListState.requestScrollToItem].
+ * @param contentType A factory of the content types for the item. The item compositions of the same
+ *  type could be reused more efficiently. Note that null is a valid type and items of such type
+ *  will be considered compatible.
+ * @param contentPadding A padding around the whole content. This will add padding for the content
+ *  after it has been clipped, which is not possible via modifier param. You can use it to add a
+ *  padding before the first item or after the last one. If you want to add a spacing between each
+ *  item, use [verticalArrangement].
+ * @param reverseLayout Indicates whether the direction of scrolling and layout should be reversed.
+ *  If `true`, items are laid out in reverse order and `LazyListState.firstVisibleItemIndex == 0`
+ *  means that the column is scrolled to the bottom. Note that this parameter does not change the
+ *  behavior of [verticalArrangement].
+ * @param verticalArrangement The vertical arrangement of the layout's children. This allows to add
+ *  a spacing between items, and to specify their arrangement when we have not enough items to fill
+ *  the whole minimum size.
+ * @param horizontalAlignment The horizontal alignment applied to the items.
+ * @param flingBehavior The logic describing the fling behavior to apply.
+ * @param userScrollEnabled Indicates whether the scrolling via the user gestures or accessibility
+ *  actions is allowed. You can still scroll programmatically using the state even when it is
+ *  disabled.
+ * @param overscrollEffect the [OverscrollEffect] that will be used to render overscroll for this
+ *  layout. Note that the [OverscrollEffect.node] will be applied internally as well, so you do not
+ *  need to use [Modifier.overscroll] separately.
+ * @param onIndicesChangedViaDragAndDrop The callback that will be invoked when the user drops an
+ *  item after dragging it, which will contain a list with all the items whose indices have changed.
+ * @param itemContentIndexed The content displayed by a single item. Here, you must use
+ *  [DraggableSwipeableItem] as the only root composable to implement the layout of each item.
  */
 @Composable
 fun <TItem> DragDropSwipeLazyColumn(
@@ -656,117 +702,101 @@ data class OrderedItem<TItem>(
 )
 
 @Composable
-@Preview(name = "A (Default)")
-@Preview(name = "B (Dark theme)", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "C (Bigger font)", fontScale = 1.75f)
+@MultiPreview
 private fun DragDropSwipeLazyColumn_InteractivePreview_Basic() {
-    val viewModel by remember { mutableStateOf(DragDropSwipeLazyColumnPreviewViewModel()) }
+    val viewModel = rememberPreviewViewModel(numberOfItems = 30)
     val state by viewModel.state.collectAsState()
 
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-    ) {
-        DragDropSwipeLazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            items = state.items,
-            key = remember { { it.id } },
-            onIndicesChangedViaDragAndDrop = viewModel::onReorderedItems,
-        ) { _, item ->
-            DraggableSwipeableItem(
-                modifier = Modifier.animateDraggableSwipeableItem(),
-                onSwipeDismiss = { viewModel.onItemSwipeDismiss(item) },
-            ) {
-                PreviewDraggableItemLayout(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    item = item,
-                )
+    ThemedPreview {
+        state.items?.let { items ->
+            DragDropSwipeLazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+                items = items,
+                key = remember { { it.id } },
+                onIndicesChangedViaDragAndDrop = viewModel::onReorderedItems,
+            ) { _, item ->
+                DraggableSwipeableItem(
+                    modifier = Modifier.animateDraggableSwipeableItem(),
+                    onSwipeDismiss = { viewModel.onItemSwipeDismiss(item) },
+                ) {
+                    PreviewDraggableItemLayout(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        item = item,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-@Preview(name = "A (Default)")
-@Preview(name = "B (Dark theme)", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "C (Bigger font)", fontScale = 1.75f)
+@MultiPreview
 private fun DragDropSwipeLazyColumn_InteractivePreview_Customized() {
-    val viewModel by remember {
-        mutableStateOf(DragDropSwipeLazyColumnPreviewViewModel(includeLockedItems = true))
-    }
+    val viewModel = rememberPreviewViewModel(numberOfItems = 30)
     val state by viewModel.state.collectAsState()
+    val layoutDirection = LocalLayoutDirection.current
 
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-    ) {
-        DragDropSwipeLazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            items = state.items,
-            key = remember { { it.id } },
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            onIndicesChangedViaDragAndDrop = viewModel::onReorderedItems,
-        ) { _, item ->
-            DraggableSwipeableItem(
-                modifier = Modifier.animateDraggableSwipeableItem(),
-                colors = DraggableSwipeableItemColors.createRemembered(
-                    containerBackgroundColor = if (item.locked) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.primaryContainer
+    ThemedPreview {
+        state.items?.let { items ->
+            DragDropSwipeLazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+                items = items,
+                key = remember { { it.id } },
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                onIndicesChangedViaDragAndDrop = viewModel::onReorderedItems,
+            ) { _, item ->
+                DraggableSwipeableItem(
+                    modifier = Modifier.animateDraggableSwipeableItem(),
+                    colors = DraggableSwipeableItemColors.createRememberedWithLayoutDirection(
+                        containerBackgroundColor = if (item.locked) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                        behindStartToEndSwipeContainerBackgroundColor = MaterialTheme.colorScheme.secondary,
+                        behindStartToEndSwipeIconColor = MaterialTheme.colorScheme.onSecondary,
+                        behindEndToStartSwipeContainerBackgroundColor = MaterialTheme.colorScheme.error,
+                        behindEndToStartSwipeIconColor = MaterialTheme.colorScheme.onError,
+                    ),
+                    shapes = SwipeableItemShapes.createRememberedWithLayoutDirection(
+                        containerBackgroundShape = MaterialTheme.shapes.medium,
+                        behindStartToEndSwipeContainerShape = CutCornerShape(percent = 25),
+                        behindEndToStartSwipeContainerShape = RoundedCornerShape(percent = 50),
+                    ),
+                    icons = SwipeableItemIcons.createRememberedWithLayoutDirection(
+                        behindStartToEndSwipeIconSwipeStarting = Icons.Outlined.Lock,
+                        behindStartToEndSwipeIconSwipeOngoing = Icons.Filled.Lock,
+                        behindEndToStartSwipeIconSwipeStarting = Icons.Outlined.Delete,
+                        behindEndToStartSwipeIconSwipeOngoing = Icons.Filled.Delete,
+                    ),
+                    allowedSwipeDirections = if (!item.locked) All else None,
+                    dragDropEnabled = !item.locked,
+                    minHeight = 60.dp,
+                    onClick = { viewModel.onItemClick(item) }.takeUnless { item.locked },
+                    onLongClick = { viewModel.onItemLongClick(item) },
+                    onSwipeDismiss = { dismissDirection ->
+                        // Start to end to mark as locked; end to start to delete
+                        val adjustedDismissDirection = dismissDirection.toLayoutAdjustedDirection(
+                            layoutDirection = layoutDirection,
+                        )
+                        val markAsLocked = adjustedDismissDirection == StartToEnd
+                        viewModel.onItemSwipeDismiss(item = item, markAsLocked = markAsLocked)
                     },
-                    behindLeftToRightSwipeContainerBackgroundColor = MaterialTheme.colorScheme.error,
-                    behindLeftToRightSwipeIconColor = MaterialTheme.colorScheme.onError,
-                    behindRightToLeftSwipeContainerBackgroundColor = MaterialTheme.colorScheme.secondary,
-                    behindRightToLeftSwipeIconColor = MaterialTheme.colorScheme.onSecondary,
-                ),
-                shapes = SwipeableItemShapes.createRemembered(
-                    containerBackgroundShape = MaterialTheme.shapes.extraSmall,
-                    behindLeftToRightSwipeContainerShape = MaterialTheme.shapes.medium,
-                    behindRightToLeftSwipeContainerShape = CircleShape,
-                ),
-                icons = SwipeableItemIcons.createRemembered(
-                    behindLeftToRightSwipeIconSwipeStarting = Icons.Outlined.Delete,
-                    behindLeftToRightSwipeIconSwipeOngoing = Icons.Filled.Delete,
-                    behindRightToLeftSwipeIconSwipeStarting = Icons.Outlined.Lock,
-                    behindRightToLeftSwipeIconSwipeOngoing = Icons.Filled.Lock,
-                ),
-                allowedSwipeDirections = if (!item.locked) All else None,
-                dragDropEnabled = !item.locked,
-                minHeight = 60.dp,
-                onClick = if (!item.locked) {
-                    { viewModel.onItemClick(item) }
-                } else {
-                    null
-                },
-                onSwipeDismiss = { dismissDirection ->
-                    // Right-to-left swipes are to mark items as locked
-                    val willBeMarkedAsLocked = dismissDirection == DismissSwipeDirection.RightToLeft
-                    if (willBeMarkedAsLocked) {
-                        // The item won't be removed from the list, it will just be marked as
-                        // locked, so we reset its swipeable state to ensure it is brought back
-                        // to its original position (i.e., back into view) after the swipe.
-                        itemState.swipeableItemState.reset()
-                    }
-
-                    // Finally, we let the viewmodel handle the swipe by updating the list of items
-                    viewModel.onItemSwipeDismiss(
+                ) {
+                    PreviewDraggableItemLayout(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         item = item,
-                        markAsLocked = willBeMarkedAsLocked,
                     )
-                },
-            ) {
-                PreviewDraggableItemLayout(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    item = item,
-                )
+                }
             }
         }
     }
@@ -782,112 +812,47 @@ internal fun DraggableSwipeableItemScope<PreviewItem>.PreviewDraggableItemLayout
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            modifier = Modifier.weight(1f),
-            text = item.title,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-        )
-
-        if (!item.locked) {
-            // Apply the drag-drop modifier to the drag handle icon
-            Icon(
-                modifier = Modifier
-                    .dragDropModifier()
-                    .size(24.dp),
-                imageVector = Icons.Default.Menu,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .animateContentSize(),
+        ) {
+            Text(
+                text = item.title,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-        } else {
-            // If the item is locked, we don't allow dragging it, so we just display a lock icon
-            Icon(
-                modifier = Modifier.size(24.dp),
-                imageVector = Icons.Default.Lock,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-        }
-    }
-}
 
-/**
- * A very basic viewmodel that exists only to power the interactive Compose previews defined above.
- */
-@Stable
-internal class DragDropSwipeLazyColumnPreviewViewModel(
-    initialNumberOfItems: Int = 30,
-    includeLockedItems: Boolean = false,
-) {
-    private val _state: MutableStateFlow<State>
-    val state: StateFlow<State> get() = _state
-
-    init {
-        // Simulate the initial loading of a list of items
-        val initialItems: ImmutableList<PreviewItem> = (1..initialNumberOfItems)
-            .map {
-                val locked = includeLockedItems && it % 4 == 0
-                PreviewItem(
-                    id = it,
-                    title = if (!locked) "Item $it" else "Item $it (locked)",
-                    locked = locked,
+            if (item.locked) {
+                Text(
+                    text = "Long tap to unlock",
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
-            .toImmutableList()
-
-        _state = MutableStateFlow(State(initialItems, initialNumberOfItems + 1))
-    }
-
-    fun onReorderedItems(
-        updatedItems: List<OrderedItem<PreviewItem>>,
-    ) {
-        val newItems = updatedItems.toReorderedItems(state.value.items)
-        _state.value = _state.value.copy(items = newItems)
-    }
-
-    fun onItemSwipeDismiss(
-        item: PreviewItem,
-        markAsLocked: Boolean = false,
-    ) {
-        val newItems = if (markAsLocked) {
-            // Mark this item as locked
-            state.value.items
-                .map { if (it == item) it.copy(locked = true) else it }
-                .toImmutableList()
-        } else {
-            // Otherwise, the swipe action will just remove the item from the list
-            state.value.items
-                .filter { it != item }
-                .toImmutableList()
         }
 
-        _state.value = _state.value.copy(items = newItems)
+        Crossfade(
+            targetState = item.locked,
+        ) { itemLocked ->
+            if (!itemLocked) {
+                // Apply the drag-drop modifier to the drag handle icon
+                Icon(
+                    modifier = Modifier
+                        .dragDropModifier()
+                        .size(24.dp),
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            } else {
+                // If the item is locked, we don't allow dragging it, so we just display a lock icon
+                Icon(
+                    modifier = Modifier.size(24.dp),
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+        }
     }
-
-    fun addNewItem() {
-        val items = state.value.items
-        val nextItemId = state.value.nextItemId
-        val newItems = items + PreviewItem(id = nextItemId, title = "Item $nextItemId")
-
-        _state.value = _state.value.copy(
-            items = newItems.toImmutableList(),
-            nextItemId = nextItemId + 1,
-        )
-    }
-
-    fun onItemClick(item: PreviewItem) {
-        // This is where we could handle clicks on a real-life scenario
-    }
-
-    @Immutable
-    data class State(
-        val items: ImmutableList<PreviewItem>,
-        val nextItemId: Int,
-    )
 }
-
-@Immutable
-internal data class PreviewItem(
-    val id: Int,
-    val title: String,
-    val locked: Boolean = false,
-)
