@@ -26,14 +26,13 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.rememberOverscrollEffect
-import androidx.compose.foundation.shape.CutCornerShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -765,14 +764,12 @@ private fun DragDropSwipeLazyColumn_InteractivePreview_Customized() {
                         behindEndToStartSwipeContainerBackgroundColor = MaterialTheme.colorScheme.error,
                         behindEndToStartSwipeIconColor = MaterialTheme.colorScheme.onError,
                     ),
-                    shapes = SwipeableItemShapes.createRememberedWithLayoutDirection(
-                        containerBackgroundShape = MaterialTheme.shapes.medium,
-                        behindStartToEndSwipeContainerShape = CutCornerShape(percent = 25),
-                        behindEndToStartSwipeContainerShape = RoundedCornerShape(percent = 50),
+                    shapes = SwipeableItemShapes.createRemembered(
+                        containersBackgroundShape = MaterialTheme.shapes.medium,
                     ),
                     icons = SwipeableItemIcons.createRememberedWithLayoutDirection(
-                        behindStartToEndSwipeIconSwipeStarting = Icons.Outlined.Lock,
-                        behindStartToEndSwipeIconSwipeOngoing = Icons.Filled.Lock,
+                        behindStartToEndSwipeIconSwipeStarting = Icons.Outlined.CheckCircle,
+                        behindStartToEndSwipeIconSwipeOngoing = Icons.Filled.CheckCircle,
                         behindEndToStartSwipeIconSwipeStarting = Icons.Outlined.Delete,
                         behindEndToStartSwipeIconSwipeOngoing = Icons.Filled.Delete,
                     ),
@@ -782,12 +779,12 @@ private fun DragDropSwipeLazyColumn_InteractivePreview_Customized() {
                     onClick = { viewModel.onItemClick(item) }.takeUnless { item.locked },
                     onLongClick = { viewModel.onItemLongClick(item) },
                     onSwipeDismiss = { dismissDirection ->
-                        // Start to end to mark as locked; end to start to delete
+                        // Start to end to archive; end to start to delete
                         val adjustedDismissDirection = dismissDirection.toLayoutAdjustedDirection(
                             layoutDirection = layoutDirection,
                         )
-                        val markAsLocked = adjustedDismissDirection == StartToEnd
-                        viewModel.onItemSwipeDismiss(item = item, markAsLocked = markAsLocked)
+                        val archiveItem = adjustedDismissDirection == StartToEnd
+                        viewModel.onItemSwipeDismiss(item = item, archiveItem = archiveItem)
                     },
                 ) {
                     PreviewDraggableItemLayout(

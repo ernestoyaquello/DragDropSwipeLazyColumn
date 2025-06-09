@@ -57,7 +57,7 @@ class ExampleViewModel(
     ) {
         updateState {
             copy(
-                banner = Banner.MessageBanner("${item.title} clicked!"),
+                banner = Banner.MessageBanner("${item.title} clicked! Try long-clicking it?"),
             )
         }
     }
@@ -67,8 +67,7 @@ class ExampleViewModel(
     ) {
         viewModelScope.launch {
             // A long click on an item will toggle its locked state
-            val updatedItem = item.copy(locked = !item.locked)
-            itemsRepository.updateItems(listOf(updatedItem))
+            itemsRepository.lockOrUnlockItem(item)
             loadItems()
         }
     }
@@ -86,18 +85,15 @@ class ExampleViewModel(
 
     fun onItemSwipeDismiss(
         item: ExampleItem,
-        markAsLocked: Boolean = false,
+        archiveItem: Boolean,
     ) {
         viewModelScope.launch {
-            if (markAsLocked) {
-                // Mark this item as locked
-                val updatedItem = item.copy(locked = true)
-                itemsRepository.updateItems(listOf(updatedItem))
-                loadItems()
+            if (archiveItem) {
+                itemsRepository.archiveItem(item)
+                loadItems(banner = Banner.DeletedItemBanner(item = item, wasArchived = true))
             } else {
-                // Otherwise, the swipe action will just remove the item from the list
                 itemsRepository.deleteItem(item)
-                loadItems(banner = Banner.DeletedItemBanner(deletedItem = item))
+                loadItems(banner = Banner.DeletedItemBanner(item = item, wasArchived = false))
             }
         }
     }
@@ -138,6 +134,7 @@ sealed class Banner {
 
     @Immutable
     data class DeletedItemBanner(
-        val deletedItem: ExampleItem,
+        val item: ExampleItem,
+        val wasArchived: Boolean,
     ) : Banner()
 }

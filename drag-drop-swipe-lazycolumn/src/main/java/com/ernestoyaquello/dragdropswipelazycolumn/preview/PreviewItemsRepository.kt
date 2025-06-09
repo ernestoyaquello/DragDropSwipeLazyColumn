@@ -46,6 +46,22 @@ internal class PreviewItemsRepository(
         }
     }
 
+    suspend fun lockOrUnlockItem(
+        itemToUpdate: PreviewItem,
+    ) {
+        itemsMutex.withLock {
+            items[itemToUpdate.index] = itemToUpdate.copy(locked = !itemToUpdate.locked)
+        }
+    }
+
+    suspend fun archiveItem(
+        itemToArchive: PreviewItem,
+    ) {
+        // We are supposed to archive the item, but we'll just remove it from the list without
+        // saving it anywhere else, as this is all fake anyway.
+        deleteItem(itemToArchive)
+    }
+
     suspend fun deleteItem(
         itemToDelete: PreviewItem,
     ) {

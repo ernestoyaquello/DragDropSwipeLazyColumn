@@ -42,7 +42,7 @@ internal class PreviewViewModel(
     fun onItemClick(
         item: PreviewItem,
     ) {
-        // Nothing to do here
+        // Nothing to do here, as this is just for a preview
     }
 
     fun onItemLongClick(
@@ -50,8 +50,7 @@ internal class PreviewViewModel(
     ) {
         viewModelScope.launch {
             // A long click on an item will toggle its locked state
-            val updatedItem = item.copy(locked = !item.locked)
-            itemsRepository.updateItems(listOf(updatedItem))
+            itemsRepository.lockOrUnlockItem(item)
             loadItems()
         }
     }
@@ -69,19 +68,25 @@ internal class PreviewViewModel(
 
     fun onItemSwipeDismiss(
         item: PreviewItem,
-        markAsLocked: Boolean = false,
+        archiveItem: Boolean = false,
     ) {
         viewModelScope.launch {
-            if (markAsLocked) {
-                // Mark this item as locked
-                val updatedItem = item.copy(locked = true)
-                itemsRepository.updateItems(listOf(updatedItem))
-                loadItems()
+            if (archiveItem) {
+                itemsRepository.archiveItem(item)
             } else {
-                // Otherwise, the swipe action will just remove the item from the list
                 itemsRepository.deleteItem(item)
-                loadItems()
             }
+            loadItems()
+        }
+    }
+
+    fun onUndoItemDeletionClick(
+        itemToRecover: PreviewItem,
+    ) {
+        // Re-add the deleted item, then reload the items for the UI to reflect the changes
+        viewModelScope.launch {
+            itemsRepository.addItem(itemToRecover)
+            loadItems()
         }
     }
 

@@ -321,7 +321,7 @@ fun SwipeableItem(
                     },
                 )
                 .then(
-                    other = if (onClick != null || onLongClick != null) {
+                    other = if (clickIndication != null && !state.isUserSwiping && (onClick != null || onLongClick != null)) {
                         // The clipped click indication needs to be added here at the end so that
                         // it's shifted appropriately by the offset applied above.
                         Modifier
@@ -330,7 +330,7 @@ fun SwipeableItem(
                             )
                             .indication(
                                 interactionSource = clickInteractionSource,
-                                indication = clickIndication?.takeUnless { state.isUserSwiping },
+                                indication = clickIndication,
                             )
                     } else {
                         Modifier
@@ -826,10 +826,10 @@ private fun SwipeableItem_InteractivePreview_Customized() {
             contentEndPadding = 16.dp,
             colors = SwipeableItemColors.createRememberedWithLayoutDirection(
                 containerBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
-                behindStartToEndSwipeContainerBackgroundColor = Color.Yellow,
-                behindStartToEndSwipeIconColor = Color.Black,
-                behindEndToStartSwipeContainerBackgroundColor = Color.Red,
-                behindEndToStartSwipeIconColor = Color.White,
+                behindStartToEndSwipeContainerBackgroundColor = MaterialTheme.colorScheme.secondary,
+                behindStartToEndSwipeIconColor = MaterialTheme.colorScheme.onSecondary,
+                behindEndToStartSwipeContainerBackgroundColor = MaterialTheme.colorScheme.error,
+                behindEndToStartSwipeIconColor = MaterialTheme.colorScheme.onError,
             ),
             shapes = SwipeableItemShapes.createRememberedWithLayoutDirection(
                 containerBackgroundShape = MaterialTheme.shapes.extraSmall,

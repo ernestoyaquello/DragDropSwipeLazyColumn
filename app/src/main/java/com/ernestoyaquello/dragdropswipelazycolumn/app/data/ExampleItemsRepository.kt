@@ -11,6 +11,8 @@ interface ExampleItemsRepository {
     suspend fun getItems(): List<ExampleItem>
     suspend fun addItem(itemToAdd: ExampleItem)
     suspend fun updateItems(itemsToUpdate: List<ExampleItem>)
+    suspend fun lockOrUnlockItem(itemToUpdate: ExampleItem)
+    suspend fun archiveItem(itemToArchive: ExampleItem)
     suspend fun deleteItem(itemToDelete: ExampleItem)
 }
 
@@ -75,6 +77,22 @@ internal class ExampleItemsRepositoryImpl(
             // Ensure the list is sorted appropriately, respecting the new item indices
             matchItemPositionsToItemIndices()
         }
+    }
+
+    override suspend fun lockOrUnlockItem(
+        itemToUpdate: ExampleItem,
+    ) {
+        itemsMutex.withLock {
+            items[itemToUpdate.index] = itemToUpdate.copy(locked = !itemToUpdate.locked)
+        }
+    }
+
+    override suspend fun archiveItem(
+        itemToArchive: ExampleItem,
+    ) {
+        // We are supposed to archive the item, but we'll just remove it from the list without
+        // saving it anywhere else, as this is all fake anyway.
+        deleteItem(itemToArchive)
     }
 
     override suspend fun deleteItem(

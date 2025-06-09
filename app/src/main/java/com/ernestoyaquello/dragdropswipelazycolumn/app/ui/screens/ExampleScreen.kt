@@ -10,16 +10,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CutCornerShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +32,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,7 +40,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -99,7 +97,7 @@ private fun ExampleScreen(
     onItemClick: (ExampleItem) -> Unit,
     onItemLongClick: (ExampleItem) -> Unit,
     onReorderedItems: (List<OrderedItem<ExampleItem>>) -> Unit,
-    onItemSwipeDismiss: (item: ExampleItem, markAsLocked: Boolean) -> Unit,
+    onItemSwipeDismiss: (item: ExampleItem, archiveItem: Boolean) -> Unit,
     onUndoItemDeletionClick: (ExampleItem) -> Unit,
     onMessageBannerDismissed: () -> Unit,
 ) {
@@ -222,12 +220,12 @@ private fun ItemList(
             onClick = { onItemClick(item) }.takeUnless { item.locked },
             onLongClick = { onItemLongClick(item) },
             onSwipeDismiss = { dismissDirection ->
-                // Start to end to mark as locked; end to start to delete
+                // Start to end to archive; end to start to delete
                 val adjustedDismissDirection = dismissDirection.toLayoutAdjustedDirection(
                     layoutDirection = layoutDirection,
                 )
-                val markAsLocked = adjustedDismissDirection == StartToEnd
-                onItemSwipeDismiss(item, markAsLocked)
+                val archiveItem = adjustedDismissDirection == StartToEnd
+                onItemSwipeDismiss(item, archiveItem)
             },
         )
     }
@@ -249,20 +247,18 @@ private fun DraggableSwipeableItemScope<ExampleItem>.Item(
             } else {
                 MaterialTheme.colorScheme.tertiaryContainer
             },
-            behindStartToEndSwipeContainerBackgroundColor = Color.Yellow, // TODO Define custom color
-            behindStartToEndSwipeIconColor = Color.Black, // TODO Define custom color
-            behindEndToStartSwipeContainerBackgroundColor = Color.Red, // TODO Define custom color
-            behindEndToStartSwipeIconColor = Color.White, // TODO Define custom color
+            behindStartToEndSwipeContainerBackgroundColor = MaterialTheme.colorScheme.tertiary,
+            behindStartToEndSwipeIconColor = MaterialTheme.colorScheme.onTertiary,
+            behindEndToStartSwipeContainerBackgroundColor = MaterialTheme.colorScheme.error,
+            behindEndToStartSwipeIconColor = MaterialTheme.colorScheme.onError,
         ),
-        shapes = SwipeableItemShapes.createRememberedWithLayoutDirection(
-            containerBackgroundShape = MaterialTheme.shapes.medium,
-            behindStartToEndSwipeContainerShape = CutCornerShape(percent = 25),
-            behindEndToStartSwipeContainerShape = RoundedCornerShape(percent = 50),
+        shapes = SwipeableItemShapes.createRemembered(
+            containersBackgroundShape = MaterialTheme.shapes.medium,
         ),
         icons = SwipeableItemIcons.createRememberedWithLayoutDirection(
-            behindStartToEndSwipeIconSwipeStarting = Icons.Outlined.LockOpen,
-            behindStartToEndSwipeIconSwipeOngoing = Icons.Outlined.Lock,
-            behindStartToEndSwipeIconSwipeFinishing = Icons.Filled.Lock,
+            behindStartToEndSwipeIconSwipeStarting = Icons.Outlined.Archive,
+            behindStartToEndSwipeIconSwipeOngoing = Icons.Filled.Archive,
+            behindStartToEndSwipeIconSwipeFinishing = Icons.Filled.Archive,
             behindEndToStartSwipeIconSwipeStarting = Icons.Outlined.DeleteSweep,
             behindEndToStartSwipeIconSwipeOngoing = Icons.Filled.DeleteSweep,
             behindEndToStartSwipeIconSwipeFinishing = Icons.Filled.Delete,
@@ -274,6 +270,12 @@ private fun DraggableSwipeableItemScope<ExampleItem>.Item(
             AllowedSwipeDirections.None
         },
         dragDropEnabled = !item.locked,
+        clickIndication = if (!item.locked) {
+            ripple(color = MaterialTheme.colorScheme.onSecondaryContainer)
+        } else {
+            // No ripple effect when the item is locked
+            null
+        },
         onClick = onClick,
         onLongClick = onLongClick,
         onSwipeDismiss = onSwipeDismiss,
@@ -363,14 +365,18 @@ private fun HandleBanner(
 
                 is Banner.DeletedItemBanner -> {
                     val snackbarResult = state.showSnackbar(
-                        message = "${banner.deletedItem.title} deleted!",
+                        message = if (banner.wasArchived) {
+                            "${banner.item.title} archived"
+                        } else {
+                            "${banner.item.title} deleted"
+                        },
                         withDismissAction = true,
                         actionLabel = "Undo",
                         duration = SnackbarDuration.Short,
                     )
                     when (snackbarResult) {
                         SnackbarResult.Dismissed -> onMessageBannerDismissed()
-                        SnackbarResult.ActionPerformed -> onUndoItemDeletionClick(banner.deletedItem)
+                        SnackbarResult.ActionPerformed -> onUndoItemDeletionClick(banner.item)
                     }
                 }
             }
