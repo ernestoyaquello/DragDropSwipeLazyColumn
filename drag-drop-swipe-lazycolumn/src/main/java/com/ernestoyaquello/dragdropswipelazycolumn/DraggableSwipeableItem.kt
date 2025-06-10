@@ -51,6 +51,9 @@ import kotlin.math.roundToInt
  * This item must be used as the root composable for the item content of [DragDropSwipeLazyColumn].
  *
  * @param modifier The [Modifier] to be applied to the item.
+ *  Here is where you can apply `animateDraggableSwipeableItem()` to enable item animations.
+ *  Don't use this modifier to apply padding around the item container. For that, use the vertical
+ *  arrangement and the content padding of the [DragDropSwipeLazyColumn] composable.
  * @param colors The colors to be used for the item.
  * @param shapes The shapes to be used for the item.
  * @param icons The icons to be used for the item.

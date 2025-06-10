@@ -38,6 +38,9 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.All
+import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.None
+import com.ernestoyaquello.dragdropswipelazycolumn.config.DraggableSwipeableItemColors
 import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemShapes
 import com.ernestoyaquello.dragdropswipelazycolumn.preview.MultiPreview
 import com.ernestoyaquello.dragdropswipelazycolumn.preview.ThemedPreview
@@ -61,13 +64,9 @@ import kotlin.math.roundToInt
  * The reason why this even exists, apart from allowing us to improve the default item addition
  * animations with some extra customization, such as a slide-in animation, is that the default
  * animations of lazy columns stop working correctly when you attempt to scroll down automatically
- * to the last added item. This happens because the call to "animateScrollToItem()" interferes with
- * the modifier "animateItem()". You can work around it by using the lazy column with a reversed
+ * to the last added item. This happens because the call to `animateScrollToItem()` interferes with
+ * the modifier `animateItem()`. You can work around it by using the lazy column with a reversed
  * layout, but that brings its own issues, hence this seemingly overcomplicated wrapper.
- *
- * To see how the wrapper is expected to be used and how it works, please refer to the previews
- * implemented below – they are expected to be run to be fully understood, as this composable
- * focuses on animations, etc.
  *
  * NOTE: This wrapper isn't perfectly generic or flexible, and it might not behave correctly in
  * certain scenarios, such as when multiple items are added to the bottom of the list at once, or
@@ -78,8 +77,8 @@ import kotlin.math.roundToInt
  * @param state The [LazyListState] of the underlying lazy column.
  * @param items The items to be displayed within the lazy column.
  * @param key A function that returns a unique key for each item.
- * @param content The composable with the list, which will be provided with a "content.listModifier"
- *  and a "content.getItemModifier()". These modifiers must be used for the enhancements to work.
+ * @param content The composable with the list, which will be provided with a `content.listModifier`
+ *  and a `content.getItemModifier()`. These modifiers must be used for the enhancements to work.
  */
 @Composable
 fun <TItem> LazyColumnEnhancingWrapper(
@@ -275,9 +274,18 @@ private fun LazyColumnEnhancingWrapper_InteractivePreview() {
                             shapes = SwipeableItemShapes.createRemembered(
                                 containersBackgroundShape = MaterialTheme.shapes.medium,
                             ),
-                            minHeight = 60.dp,
+                            colors = DraggableSwipeableItemColors.createRemembered(
+                                containerBackgroundColor = if (!item.locked) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                },
+                            ),
+                            minHeight = 56.dp,
+                            allowedSwipeDirections = if (!item.locked) All else None,
                             onClick = { viewModel.onItemClick(item) },
-                            onSwipeDismiss = { viewModel.onItemSwipeDismiss(item = item) },
+                            onLongClick = { viewModel.onItemLongClick(item) },
+                            onSwipeDismiss = { viewModel.onItemSwipeDismiss(item) },
                         ) {
                             PreviewDraggableItemLayout(
                                 modifier = Modifier

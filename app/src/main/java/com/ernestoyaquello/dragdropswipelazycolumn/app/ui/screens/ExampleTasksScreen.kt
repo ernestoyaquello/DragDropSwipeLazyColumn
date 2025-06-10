@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -32,7 +33,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,8 +56,8 @@ import com.ernestoyaquello.dragdropswipelazycolumn.LazyColumnEnhancingWrapper
 import com.ernestoyaquello.dragdropswipelazycolumn.OrderedItem
 import com.ernestoyaquello.dragdropswipelazycolumn.app.ExampleApplication
 import com.ernestoyaquello.dragdropswipelazycolumn.app.R
-import com.ernestoyaquello.dragdropswipelazycolumn.app.data.ExampleItemsRepositoryImpl
-import com.ernestoyaquello.dragdropswipelazycolumn.app.data.models.ExampleItem
+import com.ernestoyaquello.dragdropswipelazycolumn.app.data.ExampleTasksRepositoryImpl
+import com.ernestoyaquello.dragdropswipelazycolumn.app.data.models.ExampleTask
 import com.ernestoyaquello.dragdropswipelazycolumn.app.ui.theme.MultiPreview
 import com.ernestoyaquello.dragdropswipelazycolumn.app.ui.theme.ThemedPreview
 import com.ernestoyaquello.dragdropswipelazycolumn.config.DraggableSwipeableItemColors
@@ -69,43 +69,43 @@ import com.ernestoyaquello.dragdropswipelazycolumn.toLayoutAdjustedDirection
 import kotlinx.collections.immutable.ImmutableList
 
 @Composable
-fun ExampleScreen(
-    viewModel: ExampleViewModel = viewModel<ExampleViewModel> {
-        ExampleViewModel(
-            itemsRepository = (this[APPLICATION_KEY] as ExampleApplication).itemsRepository,
+fun ExampleTasksScreen(
+    viewModel: ExampleTasksViewModel = viewModel<ExampleTasksViewModel> {
+        ExampleTasksViewModel(
+            tasksRepository = (this[APPLICATION_KEY] as ExampleApplication).tasksRepository,
         )
     },
 ) {
     val state by viewModel.state.collectAsState()
-    ExampleScreen(
+    ExampleTasksScreen(
         state = state,
-        addNewItem = remember(viewModel) { viewModel::addNewItem },
-        onItemClick = remember(viewModel) { viewModel::onItemClick },
-        onItemLongClick = remember(viewModel) { viewModel::onItemLongClick },
-        onReorderedItems = remember(viewModel) { viewModel::onReorderedItems },
-        onItemSwipeDismiss = remember(viewModel) { viewModel::onItemSwipeDismiss },
-        onUndoItemDeletionClick = remember(viewModel) { viewModel::onUndoItemDeletionClick },
+        addNewTask = remember(viewModel) { viewModel::addNewTask },
+        onTaskClick = remember(viewModel) { viewModel::onTaskClick },
+        onTaskLongClick = remember(viewModel) { viewModel::onTaskLongClick },
+        onReorderedTasks = remember(viewModel) { viewModel::onReorderedTasks },
+        onTaskSwipeDismiss = remember(viewModel) { viewModel::onTaskSwipeDismiss },
+        onUndoTaskDeletionClick = remember(viewModel) { viewModel::onUndoTaskDeletionClick },
         onMessageBannerDismissed = remember(viewModel) { viewModel::onMessageBannerDismissed },
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExampleScreen(
-    state: ExampleViewModel.State,
-    addNewItem: () -> Unit,
-    onItemClick: (ExampleItem) -> Unit,
-    onItemLongClick: (ExampleItem) -> Unit,
-    onReorderedItems: (List<OrderedItem<ExampleItem>>) -> Unit,
-    onItemSwipeDismiss: (item: ExampleItem, archiveItem: Boolean) -> Unit,
-    onUndoItemDeletionClick: (ExampleItem) -> Unit,
+private fun ExampleTasksScreen(
+    state: ExampleTasksViewModel.State,
+    addNewTask: () -> Unit,
+    onTaskClick: (ExampleTask) -> Unit,
+    onTaskLongClick: (ExampleTask) -> Unit,
+    onReorderedTasks: (List<OrderedItem<ExampleTask>>) -> Unit,
+    onTaskSwipeDismiss: (task: ExampleTask, archiveTask: Boolean) -> Unit,
+    onUndoTaskDeletionClick: (ExampleTask) -> Unit,
     onMessageBannerDismissed: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     HandleBanner(
         banner = state.banner,
         state = snackbarHostState,
-        onUndoItemDeletionClick = onUndoItemDeletionClick,
+        onUndoTaskDeletionClick = onUndoTaskDeletionClick,
         onMessageBannerDismissed = onMessageBannerDismissed,
     )
 
@@ -126,21 +126,21 @@ private fun ExampleScreen(
             SnackbarHost(hostState = snackbarHostState)
         },
         floatingActionButton = {
-            AddNewItemFloatingActionButton(onClick = addNewItem)
+            AddNewTaskFloatingActionButton(onClick = addNewTask)
         },
     ) { innerPadding ->
-        when (state.items) {
+        when (state.tasks) {
             null -> Loading(
                 modifier = Modifier.padding(innerPadding),
             )
 
             else -> Content(
                 modifier = Modifier.padding(innerPadding),
-                items = state.items,
-                onReorderedItems = onReorderedItems,
-                onItemClick = onItemClick,
-                onItemLongClick = onItemLongClick,
-                onItemSwipeDismiss = onItemSwipeDismiss,
+                tasks = state.tasks,
+                onReorderedTasks = onReorderedTasks,
+                onTaskClick = onTaskClick,
+                onTaskLongClick = onTaskLongClick,
+                onTaskSwipeDismiss = onTaskSwipeDismiss,
             )
         }
     }
@@ -162,79 +162,79 @@ private fun Loading(
 @Composable
 private fun Content(
     modifier: Modifier,
-    items: ImmutableList<ExampleItem>,
-    onReorderedItems: (List<OrderedItem<ExampleItem>>) -> Unit,
-    onItemClick: (ExampleItem) -> Unit,
-    onItemLongClick: (ExampleItem) -> Unit,
-    onItemSwipeDismiss: (ExampleItem, Boolean) -> Unit,
+    tasks: ImmutableList<ExampleTask>,
+    onReorderedTasks: (List<OrderedItem<ExampleTask>>) -> Unit,
+    onTaskClick: (ExampleTask) -> Unit,
+    onTaskLongClick: (ExampleTask) -> Unit,
+    onTaskSwipeDismiss: (ExampleTask, Boolean) -> Unit,
 ) {
     val listState = rememberDragDropSwipeLazyColumnState()
 
     // The LazyColumnEnhancingWrapper is not strictly needed. If we just wanted to have
     // drag & drop and swipe gesture support, a DragDropSwipeLazyColumn is all we would
     // need. However, here we use a LazyColumnEnhancingWrapper to ensure the list gets
-    // scrolled down automatically when a new item is added, etc.
+    // scrolled down automatically when a new task is added, etc.
     LazyColumnEnhancingWrapper(
         modifier = modifier,
         state = listState.lazyListState,
-        items = items,
+        items = tasks,
         key = remember { { it.id } },
-    ) { listModifier, getItemModifier ->
-        ItemList(
+    ) { listModifier, getTaskModifier ->
+        TaskList(
             modifier = listModifier,
-            getItemModifier = getItemModifier,
+            getTaskModifier = getTaskModifier,
             state = listState,
-            items = items,
-            onReorderedItems = onReorderedItems,
-            onItemClick = onItemClick,
-            onItemLongClick = onItemLongClick,
-            onItemSwipeDismiss = onItemSwipeDismiss,
+            tasks = tasks,
+            onReorderedTasks = onReorderedTasks,
+            onTaskClick = onTaskClick,
+            onTaskLongClick = onTaskLongClick,
+            onTaskSwipeDismiss = onTaskSwipeDismiss,
         )
     }
 }
 
 @Composable
-private fun ItemList(
+private fun TaskList(
     modifier: Modifier,
-    getItemModifier: @Composable ((Int, ExampleItem) -> Modifier),
+    getTaskModifier: @Composable ((Int, ExampleTask) -> Modifier),
     state: DragDropSwipeLazyColumnState,
-    items: ImmutableList<ExampleItem>,
-    onReorderedItems: (List<OrderedItem<ExampleItem>>) -> Unit,
-    onItemClick: (ExampleItem) -> Unit,
-    onItemLongClick: (ExampleItem) -> Unit,
-    onItemSwipeDismiss: (ExampleItem, Boolean) -> Unit,
+    tasks: ImmutableList<ExampleTask>,
+    onReorderedTasks: (List<OrderedItem<ExampleTask>>) -> Unit,
+    onTaskClick: (ExampleTask) -> Unit,
+    onTaskLongClick: (ExampleTask) -> Unit,
+    onTaskSwipeDismiss: (ExampleTask, Boolean) -> Unit,
 ) {
     DragDropSwipeLazyColumn(
         modifier = modifier.fillMaxSize(),
         state = state,
-        items = items,
+        items = tasks,
         key = remember { { it.id } },
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        onIndicesChangedViaDragAndDrop = onReorderedItems,
-    ) { index, item ->
+        onIndicesChangedViaDragAndDrop = onReorderedTasks,
+    ) { index, task ->
         val layoutDirection = LocalLayoutDirection.current
-        Item(
-            modifier = getItemModifier(index, item),
-            item = item,
-            onClick = { onItemClick(item) }.takeUnless { item.locked },
-            onLongClick = { onItemLongClick(item) },
+        Task(
+            modifier = getTaskModifier(index, task),
+            task = task,
+            onClick = { onTaskClick(task) }.takeUnless { task.isLocked },
+            onLongClick = { onTaskLongClick(task) },
             onSwipeDismiss = { dismissDirection ->
                 // Start to end to archive; end to start to delete
                 val adjustedDismissDirection = dismissDirection.toLayoutAdjustedDirection(
                     layoutDirection = layoutDirection,
                 )
-                val archiveItem = adjustedDismissDirection == StartToEnd
-                onItemSwipeDismiss(item, archiveItem)
+                val archiveTask = adjustedDismissDirection == StartToEnd
+                onTaskSwipeDismiss(task, archiveTask)
             },
         )
     }
 }
 
 @Composable
-private fun DraggableSwipeableItemScope<ExampleItem>.Item(
+private fun DraggableSwipeableItemScope<ExampleTask>.Task(
     modifier: Modifier,
-    item: ExampleItem,
+    task: ExampleTask,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
     onSwipeDismiss: (DismissSwipeDirection) -> Unit,
@@ -242,10 +242,10 @@ private fun DraggableSwipeableItemScope<ExampleItem>.Item(
     DraggableSwipeableItem(
         modifier = modifier.animateDraggableSwipeableItem(),
         colors = DraggableSwipeableItemColors.createRememberedWithLayoutDirection(
-            containerBackgroundColor = if (!item.locked) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.tertiaryContainer
+            containerBackgroundColor = when {
+                task.isLocked -> MaterialTheme.colorScheme.tertiaryContainer
+                task.isCompleted -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.secondaryContainer
             },
             behindStartToEndSwipeContainerBackgroundColor = MaterialTheme.colorScheme.tertiary,
             behindStartToEndSwipeIconColor = MaterialTheme.colorScheme.onTertiary,
@@ -264,52 +264,52 @@ private fun DraggableSwipeableItemScope<ExampleItem>.Item(
             behindEndToStartSwipeIconSwipeFinishing = Icons.Filled.Delete,
         ),
         minHeight = 60.dp,
-        allowedSwipeDirections = if (!item.locked) {
+        allowedSwipeDirections = if (!task.isLocked) {
             AllowedSwipeDirections.All
         } else {
             AllowedSwipeDirections.None
         },
-        dragDropEnabled = !item.locked,
-        clickIndication = if (!item.locked) {
-            ripple(color = MaterialTheme.colorScheme.onSecondaryContainer)
-        } else {
-            // No ripple effect when the item is locked
-            null
-        },
+        dragDropEnabled = !task.isLocked,
+        clickIndication = null, // no ripple for the task completion to feel snappy and instantaneous
         onClick = onClick,
         onLongClick = onLongClick,
         onSwipeDismiss = onSwipeDismiss,
     ) {
-        ItemLayout(
+        TaskLayout(
             modifier = Modifier
                 .align(Alignment.Center)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            item = item,
+            task = task,
         )
     }
 }
 
 @Composable
-internal fun DraggableSwipeableItemScope<ExampleItem>.ItemLayout(
+internal fun DraggableSwipeableItemScope<ExampleTask>.TaskLayout(
     modifier: Modifier,
-    item: ExampleItem,
+    task: ExampleTask,
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Checkbox(
+            checked = task.isCompleted,
+            onCheckedChange = null,
+        )
+
         Column(
             modifier = Modifier
                 .weight(1f)
                 .animateContentSize(),
         ) {
             Text(
-                text = item.title,
+                text = task.title,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
 
-            if (item.locked) {
+            if (task.isLocked) {
                 Text(
                     text = "Long tap to unlock",
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -319,9 +319,9 @@ internal fun DraggableSwipeableItemScope<ExampleItem>.ItemLayout(
         }
 
         Crossfade(
-            targetState = item.locked,
-        ) { itemLocked ->
-            if (!itemLocked) {
+            targetState = task.isLocked,
+        ) { taskLocked ->
+            if (!taskLocked) {
                 // Apply the drag-drop modifier to the drag handle icon
                 Icon(
                     modifier = Modifier
@@ -332,7 +332,7 @@ internal fun DraggableSwipeableItemScope<ExampleItem>.ItemLayout(
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             } else {
-                // If the item is locked, we don't allow dragging it, so we just display a lock icon
+                // If the task is locked, we don't allow dragging it, so we just display a lock icon
                 Icon(
                     modifier = Modifier.size(24.dp),
                     imageVector = Icons.Default.Lock,
@@ -348,7 +348,7 @@ internal fun DraggableSwipeableItemScope<ExampleItem>.ItemLayout(
 private fun HandleBanner(
     banner: Banner?,
     state: SnackbarHostState,
-    onUndoItemDeletionClick: (ExampleItem) -> Unit,
+    onUndoTaskDeletionClick: (ExampleTask) -> Unit,
     onMessageBannerDismissed: () -> Unit,
 ) {
     if (banner != null) {
@@ -363,12 +363,12 @@ private fun HandleBanner(
                     onMessageBannerDismissed()
                 }
 
-                is Banner.DeletedItemBanner -> {
+                is Banner.DeletedTaskBanner -> {
                     val snackbarResult = state.showSnackbar(
                         message = if (banner.wasArchived) {
-                            "${banner.item.title} archived"
+                            "Task \"${banner.task.title}\" archived"
                         } else {
-                            "${banner.item.title} deleted"
+                            "Task \"${banner.task.title}\" deleted"
                         },
                         withDismissAction = true,
                         actionLabel = "Undo",
@@ -376,7 +376,7 @@ private fun HandleBanner(
                     )
                     when (snackbarResult) {
                         SnackbarResult.Dismissed -> onMessageBannerDismissed()
-                        SnackbarResult.ActionPerformed -> onUndoItemDeletionClick(banner.item)
+                        SnackbarResult.ActionPerformed -> onUndoTaskDeletionClick(banner.task)
                     }
                 }
             }
@@ -385,7 +385,7 @@ private fun HandleBanner(
 }
 
 @Composable
-private fun AddNewItemFloatingActionButton(
+private fun AddNewTaskFloatingActionButton(
     onClick: () -> Unit,
 ) {
     FloatingActionButton(
@@ -393,19 +393,19 @@ private fun AddNewItemFloatingActionButton(
     ) {
         Icon(
             imageVector = Icons.Rounded.Add,
-            contentDescription = "Add item",
+            contentDescription = "Add task",
         )
     }
 }
 
 @Composable
 @MultiPreview
-private fun ExampleScreenPreview() {
+private fun ExampleScreen_InteractivePreview() {
     ThemedPreview {
-        ExampleScreen(
+        ExampleTasksScreen(
             // Using the real viewmodel so that the interactive preview has all the functionality
             viewModel = remember {
-                ExampleViewModel(ExampleItemsRepositoryImpl())
+                ExampleTasksViewModel(ExampleTasksRepositoryImpl())
             },
         )
     }

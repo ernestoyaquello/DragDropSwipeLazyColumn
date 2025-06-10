@@ -101,8 +101,6 @@ import kotlin.math.sign
  * A simple Composable that can be used to create a horizontally swipeable item.
  * When the item is swiped successfully, [onSwipeDismiss] will be invoked.
  *
- * You can see an example of how to use this component in the preview at the bottom of this file.
- *
  * @param modifier The [Modifier] to be applied to the item.
  * @param state The [SwipeableItemState] that will be used to control the item.
  * @param colors The [SwipeableItemColors] that will be used to style the item.
@@ -192,7 +190,9 @@ fun SwipeableItem(
             },
     ) {
         val localDensity = LocalDensity.current
-        val clickInteractionSource = remember { MutableInteractionSource() }
+        val clickInteractionSource = remember(onClick, onLongClick) {
+            MutableInteractionSource()
+        }
         val adjustedMinSwipeHorizontality = minSwipeHorizontality?.takeUnless { it == 0f }
         val layoutDirection = LocalLayoutDirection.current
 

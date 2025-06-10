@@ -532,20 +532,5 @@ data class SwipeableItemIcons private constructor(
             behindLeftToRightSwipeIconSwipeFinishing = behindSwipeIconSwipeFinishing,
             behindRightToLeftSwipeIconSwipeFinishing = behindSwipeIconSwipeFinishing,
         )
-
-        /**
-         * Creates a remembered instance of [SwipeableItemIcons] with the specified icon.
-         *
-         * @param behindSwipeIcon The icon that will be shown behind the item whenever the user is
-         *  swiping it.
-         */
-        @Composable
-        fun createRemembered(
-            behindSwipeIcon: ImageVector? = Icons.Filled.Delete,
-        ) = createRemembered(
-            behindSwipeIconSwipeStarting = behindSwipeIcon,
-            behindSwipeIconSwipeOngoing = behindSwipeIcon,
-            behindSwipeIconSwipeFinishing = behindSwipeIcon,
-        )
     }
 }

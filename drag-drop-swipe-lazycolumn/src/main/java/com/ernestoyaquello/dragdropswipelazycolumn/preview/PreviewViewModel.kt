@@ -33,7 +33,6 @@ internal class PreviewViewModel(
 
     fun addNewItem() {
         viewModelScope.launch {
-            // Add the new item, then reload the items for the UI to reflect the changes
             itemsRepository.addItem(PreviewItem())
             loadItems()
         }
@@ -42,7 +41,7 @@ internal class PreviewViewModel(
     fun onItemClick(
         item: PreviewItem,
     ) {
-        // Nothing to do here, as this is just for a preview
+        // Nothing to do here
     }
 
     fun onItemLongClick(
@@ -68,24 +67,9 @@ internal class PreviewViewModel(
 
     fun onItemSwipeDismiss(
         item: PreviewItem,
-        archiveItem: Boolean = false,
     ) {
         viewModelScope.launch {
-            if (archiveItem) {
-                itemsRepository.archiveItem(item)
-            } else {
-                itemsRepository.deleteItem(item)
-            }
-            loadItems()
-        }
-    }
-
-    fun onUndoItemDeletionClick(
-        itemToRecover: PreviewItem,
-    ) {
-        // Re-add the deleted item, then reload the items for the UI to reflect the changes
-        viewModelScope.launch {
-            itemsRepository.addItem(itemToRecover)
+            itemsRepository.deleteItem(item)
             loadItems()
         }
     }
