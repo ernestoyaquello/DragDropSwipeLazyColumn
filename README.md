@@ -1,7 +1,7 @@
 # ↕️ DragDropSwipeLazyColumn
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.ernestoyaquello.dragdropswipelazycolumn/drag-drop-swipe-lazycolumn)](https://mvnrepository.com/artifact/com.ernestoyaquello.dragdropswipelazycolumn/drag-drop-swipe-lazycolumn)
-[![Build](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/actions/workflows/ci.yml/badge.svg)](https://github.com/jordond/materialkolor/actions/workflows/ci.yml)
+[![Build](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/actions/workflows/ci.yml/badge.svg)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/ernestoyaquello/DragDropSwipeLazyColumn)](https://opensource.org/license/mit/)
 
 [![issues](https://img.shields.io/github/issues/ernestoyaquello/DragDropSwipeLazyColumn)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/issues)
@@ -12,9 +12,9 @@ Kotlin Android library for Jetpack Compose that implements a lazy column with dr
 
 ## 🎥 Demo
 
-With the `DragDropSwipeLazyColumn`, you can drag an item beyond the last visible item, define different styles for different swipe directions, etc.
+With the [`DragDropSwipeLazyColumn`](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/blob/main/drag-drop-swipe-lazycolumn/src/main/java/com/ernestoyaquello/dragdropswipelazycolumn/DragDropSwipeLazyColumn.kt), you can drag an item beyond the last visible item, define different styles for different swipe directions, etc.
 
-![Demo GIF for the DragDropSwipeLazyColumn](drag-drop-swipe-lazycolumn-demo.gif)
+![Animated image as a demo for the `DragDropSwipeLazyColumn`](drag-drop-swipe-lazycolumn-demo.webp)
 
 ## ✏️ Show me the code!
 
@@ -37,7 +37,7 @@ Implement your list using `DragDropSwipeLazyColumn`:
 ```kotlin
 DragDropSwipeLazyColumn(
     modifier = Modifier.fillMaxSize(),
-    items = items,
+    items = items, // must be an immutable list of items
     key = remember { { it.id } }, // each item must have a unique key
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -55,11 +55,20 @@ DragDropSwipeLazyColumn(
     ) {
 
         // Down here you just need to specify the contents of your item
-        Text(
-            modifier = Modifier.align(Alignment.Center)
-            text = item.title,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-        )
+        Row {
+            Text(
+                modifier = Modifier.weight(1f),
+                text = item.title,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+
+            // Finally, apply the drag-drop modifier to the drag handle icon
+            Icon(
+                modifier = Modifier.dragDropModifier(),
+                imageVector = Icons.Default.Menu,
+                contentDescription = null,
+            )
+        }
     }
 }
 ```
@@ -70,21 +79,21 @@ That's it, everything should be working already. Isn't it nice?
 
 ## 🤔 Would you like to know more?
 
-The code is **fully documented**, and there are some **usage examples**, such as a fully fledged example app and a few Compose previews, so I would recommend checking out this whole repository, as the code might answer most of your questions.
+The code is **fully documented**, and there are some **usage examples**, such as a [fully fledged example app](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/tree/main/app) and a few Compose previews, so I would recommend checking out this whole repository, as the code might answer most of your questions.
 
 ### 📝 Limitations & disclaimers
 
-While this library is highly customizable, the functionality it offers is still somewhat limited, and many of the choices that were taken during its development were opinionated. Thus, this isn't a one-size-fits-all solution, but a tool that works in a certain way and is valid for some (but not all) scenarios.
+While this library is highly customizable, the functionality it offers is still somewhat limited, and many of the choices that were taken during its development were opinionated and not necessarily the most forward-thinking ones possible. Thus, this isn't a perfect, one-size-fits-all solution, but a tool that works in a certain way and is valid for many (but not all) scenarios.
 
 For example, this library uses the `Material3` library, is only compatible with vertical lists (neither horizontal lists nor grids are supported), and doesn't support the use of partial swipes to reveal hidden, interactable content behind the item (this library only supports swipe gestures meant to dismiss the item). Not only that, but despite its extensive customization options, it also has a specific look and *feel* in some regards.
 
-All in all, I still believe that the features this library currently provides are more than enough in most cases, but there might always be exceptions. And while I am willing to accommodate some of them (should they arise), I would rather keep things simple and maintainable if possible.
+All in all, I still believe that the features this library currently provides are enough in most cases, but there might always be exceptions. And while I am willing to accommodate some of them (should they arise), I would rather keep things simple and maintainable if possible.
 
 ### 🤝 Contributions
 
-I would be more than happy to accept help or suggestions. However, as mentioned above, I am probably going to be wary of massive or complex changes that could cause the code to become an untamable behemoth. 🙈
+I would be more than happy to accept help or suggestions, but I am probably going to be wary of massive and/or overly complex changes that could cause the code to become an untamable behemoth. 🙈
 
-### 🫆 License
+### ©️ License
 
 You can do pretty much whatever you want with this code. In fact, copying it is highly encouraged!
 

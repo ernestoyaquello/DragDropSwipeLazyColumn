@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @Stable
-internal class PreviewViewModel(
+internal class PreviewViewModel private constructor(
     private val itemsRepository: PreviewItemsRepository,
     private val viewModelScope: CoroutineScope,
 ) {
@@ -84,17 +84,20 @@ internal class PreviewViewModel(
     data class State(
         val items: ImmutableList<PreviewItem>? = null,
     )
-}
 
-@Composable
-internal fun rememberPreviewViewModel(
-    numberOfItems: Int = 6,
-): PreviewViewModel {
-    val coroutineScope = rememberCoroutineScope()
-    return remember(coroutineScope) {
-        PreviewViewModel(
-            itemsRepository = PreviewItemsRepository(initialNumberOfItems = numberOfItems),
-            viewModelScope = coroutineScope,
-        )
+    companion object {
+
+        @Composable
+        internal fun rememberPreviewViewModel(
+            numberOfItems: Int = 6,
+        ): PreviewViewModel {
+            val coroutineScope = rememberCoroutineScope()
+            return remember(coroutineScope) {
+                PreviewViewModel(
+                    itemsRepository = PreviewItemsRepository(initialNumberOfItems = numberOfItems),
+                    viewModelScope = coroutineScope,
+                )
+            }
+        }
     }
 }

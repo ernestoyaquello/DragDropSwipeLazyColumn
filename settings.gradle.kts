@@ -23,4 +23,3 @@ rootProject.name = "DragDropSwipeLazyColumn"
 
 include(":app")
 include(":drag-drop-swipe-lazycolumn")
-include(":drag-drop-swipe-lazycolumn")
