@@ -8,7 +8,7 @@ Kotlin Android library for Jetpack Compose that implements a lazy column with dr
 
 ## 🎥 Demo
 
-With the [`DragDropSwipeLazyColumn`](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/blob/main/drag-drop-swipe-lazycolumn/src/main/java/com/ernestoyaquello/dragdropswipelazycolumn/DragDropSwipeLazyColumn.kt), you can drag an item beyond the last visible item, define different styles for different swipe directions, etc.
+With the [`DragDropSwipeLazyColumn`](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/blob/main/drag-drop-swipe-lazycolumn/src/main/java/com/ernestoyaquello/dragdropswipelazycolumn/DragDropSwipeLazyColumn.kt), you can drag an item beyond the first or the last visible one, define different styles and icons for different swipe directions, etc.
 
 ![Animated image as a demo for the `DragDropSwipeLazyColumn`](drag-drop-swipe-lazycolumn-demo.webp)
 
@@ -75,7 +75,7 @@ DragDropSwipeLazyColumn(
         onSwipeDismiss = { viewModel.onItemSwipeDismiss(item) },
     ) {
 
-        // Down here you just need to specify the contents of your item
+        // Down here, you just need to specify the contents of your item
         Row {
             Text(
                 modifier = Modifier.weight(1f),
