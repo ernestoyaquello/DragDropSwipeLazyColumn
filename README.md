@@ -100,7 +100,7 @@ If you've followed the steps above, everything should already be working.
 
 ## 🤔 Would you like to know more?
 
-The code is **fully documented**, and there are some **usage examples**, such as a [fully fledged example app](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/tree/main/app) and a few Compose previews, so I would recommend checking out this whole repository, as the code might answer most of your questions.
+The code is **fully documented**, and there are some **usage examples**, such as an [example app](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/tree/main/app) and a few Compose previews, so I would recommend checking out this whole repository, as the code might answer most of your questions.
 
 ### 📝 Limitations & disclaimers
 
