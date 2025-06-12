@@ -1,9 +1,5 @@
 # ↕️ DragDropSwipeLazyColumn
 
-[![Maven Central](https://img.shields.io/maven-central/v/com.ernestoyaquello.dragdropswipelazycolumn/drag-drop-swipe-lazycolumn)](https://mvnrepository.com/artifact/com.ernestoyaquello.dragdropswipelazycolumn/drag-drop-swipe-lazycolumn)
-[![Build](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/actions/workflows/ci.yml/badge.svg)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/ernestoyaquello/DragDropSwipeLazyColumn)](https://opensource.org/license/mit/)
-
 [![issues](https://img.shields.io/github/issues/ernestoyaquello/DragDropSwipeLazyColumn)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/issues)
 [![pull requests](https://img.shields.io/github/issues-pr/ernestoyaquello/DragDropSwipeLazyColumn)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/pulls)
 [![contributors](https://img.shields.io/github/contributors/ernestoyaquello/DragDropSwipeLazyColumn)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/graphs/contributors)
@@ -22,7 +18,32 @@ You can make this work in a couple of simple steps. 👇
 
 ### 1. Reference the library
 
-Add the library to your project via `mavenCentral` by adding the following line to your app's Gradle file:
+The library is available via `mavenCentral`, but you need to reference it from your project. There are two ways to do this.
+
+#### If you are using a catalogue
+
+If you have a `libs.versions.toml` catalog for your dependencies, add these two lines to it:
+
+```toml
+[versions]
+dragDropSwipeLazyColumn = "0.9.0"
+
+[libraries]
+drag-drop-swipe-lazycolumn = { module = "com.ernestoyaquello.dragdropswipelazycolumn:drag-drop-swipe-lazycolumn", version.ref = "dragDropSwipeLazyColumn" }
+
+```
+
+Then, in your Gradle file, reference the library:
+
+```kotlin
+dependencies {
+    implementation(libs.drag.drop.swipe.lazycolumn)
+}
+```
+
+#### If you are *not* using a catalogue
+
+Otherwise, if you are not using a catalogue to manage your dependencies, just add the library directly to the Gradle file of your application:
 
 ```kotlin
 dependencies {
@@ -32,7 +53,7 @@ dependencies {
 
 ### 2. Implement the list
 
-Implement your list using `DragDropSwipeLazyColumn`:
+Now, you can implement your list using `DragDropSwipeLazyColumn`:
 
 ```kotlin
 DragDropSwipeLazyColumn(
@@ -73,9 +94,9 @@ DragDropSwipeLazyColumn(
 }
 ```
 
-### 3. Enjoy!
+### 3. That's it!
 
-That's it, everything should be working already. Isn't it nice?
+If you've followed the steps above, everything should already be working.
 
 ## 🤔 Would you like to know more?
 
