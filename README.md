@@ -1,4 +1,4 @@
-# ↕️ DragDropSwipeLazyColumn
+# ↕️ Drag & Drop n' Swipe LazyColumn
 
 [![issues](https://img.shields.io/github/issues/ernestoyaquello/DragDropSwipeLazyColumn)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/issues)
 [![pull requests](https://img.shields.io/github/issues-pr/ernestoyaquello/DragDropSwipeLazyColumn)](https://github.com/ernestoyaquello/DragDropSwipeLazyColumn/pulls)
