@@ -210,6 +210,7 @@ fun <TItem> DragDropSwipeLazyColumn(
 
             val scope = remember(
                 itemState,
+                index,
                 state,
                 listContentStartPadding,
                 listContentEndPadding,
@@ -217,6 +218,7 @@ fun <TItem> DragDropSwipeLazyColumn(
             ) {
                 DraggableSwipeableItemScope<TItem>(
                     itemState = itemState,
+                    currentIndex = index,
                     listState = state,
                     contentStartPadding = listContentStartPadding,
                     contentEndPadding = listContentEndPadding,
@@ -241,6 +243,7 @@ fun <TItem> DragDropSwipeLazyColumn(
                 lazyListState = state.lazyListState,
                 layoutReversed = reverseLayout,
                 draggedItem = item,
+                draggedItemIndex = index,
                 visibleListHeightInPx = listHeightInPx,
             )
 
@@ -254,6 +257,7 @@ fun <TItem> DragDropSwipeLazyColumn(
                 layoutReversed = reverseLayout,
                 orderedItems = orderedItems,
                 draggedItem = item,
+                draggedItemIndex = index,
                 visibleListHeightInPx = listHeightInPx,
                 key = key,
                 onItemsReordered = { reorderedItems ->
@@ -330,6 +334,7 @@ private fun <TItem> ReorderItemsIfNeeded(
     layoutReversed: Boolean,
     orderedItems: ImmutableList<OrderedItem<TItem>>,
     draggedItem: OrderedItem<TItem>,
+    draggedItemIndex: Int,
     visibleListHeightInPx: Float,
     key: (TItem) -> Any,
     onItemsReordered: (ImmutableList<OrderedItem<TItem>>) -> Unit,
@@ -346,18 +351,22 @@ private fun <TItem> ReorderItemsIfNeeded(
         layoutReversed,
         orderedItems,
         draggedItem,
+        draggedItemIndex,
         visibleListHeightInPx,
         key,
         onItemsReordered,
     ) {
         snapshotFlow {
-            itemState.offsetTargetInPx to lazyListState.layoutInfo
+            Triple(
+                itemState.offsetTargetInPx * (if (!layoutReversed) 1f else -1f),
+                itemState.currentDragIndex,
+                lazyListState.layoutInfo,
+            )
         }
-            .map { (offsetTargetInPx, layoutInfo) ->
-                val updatedOffsetTargetInPx = offsetTargetInPx * (if (!layoutReversed) 1f else -1f)
-                updatedOffsetTargetInPx to layoutInfo
+            .filter { (offsetTargetInPx, currentDragIndex, _) ->
+                offsetTargetInPx != 0f && (currentDragIndex == null || currentDragIndex == draggedItemIndex)
             }
-            .filter { (offsetTargetInPx, _) -> offsetTargetInPx != 0f }
+            .map { (offsetTargetInPx, _, layoutInfo) -> offsetTargetInPx to layoutInfo }
             .distinctUntilChanged()
             .map { (offsetTargetInPx, layoutInfo) ->
                 val draggedItemInfo = layoutInfo.visibleItemsInfo.find {
@@ -490,6 +499,7 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
     lazyListState: LazyListState,
     layoutReversed: Boolean,
     draggedItem: OrderedItem<TItem>,
+    draggedItemIndex: Int,
     visibleListHeightInPx: Float,
 ) {
     var isDropHandlingPending by remember { mutableStateOf(false) }
@@ -504,15 +514,25 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
     val minScrollInPx = with(LocalDensity.current) { minScroll.toPx() }
     val maxScrollInPx = with(LocalDensity.current) { maxScroll.toPx() }
 
-    LaunchedEffect(itemState, lazyListState, layoutReversed, draggedItem, visibleListHeightInPx) {
+    LaunchedEffect(
+        itemState,
+        lazyListState,
+        layoutReversed,
+        draggedItem,
+        draggedItemIndex,
+        visibleListHeightInPx,
+    ) {
         snapshotFlow {
-            itemState.offsetTargetInPx to lazyListState.layoutInfo
+            Triple(
+                itemState.offsetTargetInPx * (if (!layoutReversed) 1f else -1f),
+                itemState.currentDragIndex,
+                lazyListState.layoutInfo,
+            )
         }
-            .map { (offsetTargetInPx, layoutInfo) ->
-                val updatedOffsetTargetInPx = offsetTargetInPx * (if (!layoutReversed) 1f else -1f)
-                updatedOffsetTargetInPx to layoutInfo
+            .filter { (_, currentDragIndex, _) ->
+                currentDragIndex == null || currentDragIndex == draggedItemIndex
             }
-            .map { (offsetTargetInPx, layoutInfo) ->
+            .map { (offsetTargetInPx, _, layoutInfo) ->
                 val draggedItemInfo = layoutInfo.visibleItemsInfo.find { itemInfo ->
                     itemInfo.key == itemState.itemKey
                 }
@@ -556,9 +576,6 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
                 return@map null
             }
             .filterNotNull()
-            .filter { (_, hiddenItemSize, _) ->
-                hiddenItemSize > 0f
-            }
             .collect { (itemSize, hiddenItemSize, isHiddenPartAtTheEnd) ->
                 if (itemState.isBeingDragged) {
                     // The item is currently being dragged, so we indicate that a drop is pending
@@ -591,9 +608,9 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
                     // The item is no longer being dragged, so we make sure we make it fully visible
                     // now that the user has dropped it.
                     val scroll = if (isHiddenPartAtTheEnd) {
-                        hiddenItemSize + lazyListState.layoutInfo.afterContentPadding
+                        hiddenItemSize + lazyListState.layoutInfo.mainAxisItemSpacing
                     } else {
-                        -(hiddenItemSize + lazyListState.layoutInfo.beforeContentPadding)
+                        -(hiddenItemSize + lazyListState.layoutInfo.mainAxisItemSpacing)
                     }
                     lazyListState.animateScrollBy(scroll)
 

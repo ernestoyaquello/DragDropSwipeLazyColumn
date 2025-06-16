@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -167,7 +169,7 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
             .offset {
                 IntOffset(
                     x = 0,
-                    y = if (itemState.isBeingDragged) {
+                    y = if (itemState.isBeingDragged && itemState.currentDragIndex == currentIndex) {
                         // The user is dragging the item, so we want to apply the offset immediately
                         // to ensure the user's pointer input is followed as quickly as possible and
                         // without potential animation delays (even though we use "snap to" on the
@@ -230,9 +232,24 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
     ) {
         // Ensure the drag-drop modifier is ready before the item is drawn, then draw the item
         dragDropModifier = if (dragDropEnabled && !isUserDraggingAnotherItem) {
+            // Keep the index that will be used to mark the initial position of the item when the
+            // dragging starts, making sure not to change it while the item is being dragged, as
+            // that would cause the pointerInput to be reset, interrupting the dragging gesture.
+            // Once the item is dropped though, we will update the index to the current one so that
+            // the next dragging gesture works as expected.
+            var nextIndexWhenDragStarts by remember { mutableIntStateOf(currentIndex) }
+            if (!itemState.isBeingDragged) {
+                LaunchedEffect(currentIndex) {
+                    nextIndexWhenDragStarts = currentIndex
+                }
+            }
+
+            // Ensure the minimum horizontal swipe isn't zero to avoid division by zero errors
             val adjustedMinSwipeHorizontality = minSwipeHorizontality?.takeUnless { it == 0f }
+
             Modifier.pointerInput(
                 itemState,
+                nextIndexWhenDragStarts,
                 adjustedMinSwipeHorizontality,
                 onDragStart,
                 onDragUpdate,
@@ -241,6 +258,7 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
                 awaitEachGesture {
                     handleDragDropGestures(
                         itemState = itemState,
+                        indexWhenDragStarts = nextIndexWhenDragStarts,
                         minSwipeHorizontality = adjustedMinSwipeHorizontality,
                         onDragStart = onDragStart,
                         onDragUpdate = onDragUpdate,
@@ -257,6 +275,7 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
 
 private suspend fun AwaitPointerEventScope.handleDragDropGestures(
     itemState: DraggableSwipeableItemState,
+    indexWhenDragStarts: Int,
     minSwipeHorizontality: Float?,
     onDragStart: (dragDeltaInPx: Float) -> Unit,
     onDragUpdate: (dragDeltaInPx: Float) -> Unit,
@@ -266,10 +285,7 @@ private suspend fun AwaitPointerEventScope.handleDragDropGestures(
         val dragDelta = drag.position.y - drag.previousPosition.y
         drag.consume()
         itemState.update {
-            copy(
-                isBeingDragged = true,
-                offsetTargetInPx = offsetTargetInPx + dragDelta,
-            )
+            copy(offsetTargetInPx = offsetTargetInPx + dragDelta)
         }
     }
 
@@ -288,7 +304,12 @@ private suspend fun AwaitPointerEventScope.handleDragDropGestures(
         // with potential horizontal swipes and other gestures.
         if (minSwipeHorizontality == null || verticalSlope >= (1f / minSwipeHorizontality)) {
             down.consume()
-            itemState.update { copy(isBeingDragged = true) }
+            itemState.update {
+                copy(
+                    isBeingDragged = true,
+                    currentDragIndex = indexWhenDragStarts,
+                )
+            }
             handleDrag(potentialDrag)
             onDragStart(potentialDragDelta)
         }

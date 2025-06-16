@@ -19,6 +19,7 @@ import com.ernestoyaquello.dragdropswipelazycolumn.state.DraggableSwipeableItemS
 @LazyScopeMarker
 class DraggableSwipeableItemScope<TItem> internal constructor(
     val itemState: DraggableSwipeableItemState,
+    internal val currentIndex: Int,
     internal val listState: DragDropSwipeLazyColumnState,
     internal val contentStartPadding: Dp,
     internal val contentEndPadding: Dp,
