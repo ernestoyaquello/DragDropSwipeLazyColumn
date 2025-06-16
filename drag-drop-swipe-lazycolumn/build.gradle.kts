@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.ernestoyaquello.dragdropswipelazycolumn"
-version = "0.10.0"
+version = "0.10.1"
 
 android {
     namespace = "com.ernestoyaquello.dragdropswipelazycolumn"
