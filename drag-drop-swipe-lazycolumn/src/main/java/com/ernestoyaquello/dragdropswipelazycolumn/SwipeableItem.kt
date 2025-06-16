@@ -169,7 +169,7 @@ fun SwipeableItem(
 
     ApplySwipeOffsetIfNeeded(
         animatedSwipeOffsetInPx = animatedSwipeOffsetInPx,
-        isUserSwiping = state.isUserSwiping,
+        isUserSwiping = state.isBeingSwiped,
         swipeOffsetTargetInPx = state.offsetTargetInPx,
         lastSwipeVelocity = state.lastVelocity,
         isItemDismissedOrBeingDismissed = state.isItemDismissedOrBeingDismissed,
@@ -202,7 +202,7 @@ fun SwipeableItem(
         // simply because it's bouncing as part of the animation to make it return automatically to
         // said position, in which case we will make sure to hide the behind content, as it would be
         // weird to see the behind content appearing behind the item as the item bounces into place.
-        if (animatedSwipeOffsetInPx.value != 0f && (!isItemBouncingBackToItsOriginalPosition || state.isUserSwiping)) {
+        if (animatedSwipeOffsetInPx.value != 0f && (!isItemBouncingBackToItsOriginalPosition || state.isBeingSwiped)) {
             val containerBackgroundColor = when {
                 animatedSwipeOffsetInPx.value > 0f -> colors.behindLeftToRightSwipeContainerBackgroundColor
                 animatedSwipeOffsetInPx.value < 0f -> colors.behindRightToLeftSwipeContainerBackgroundColor
@@ -294,7 +294,7 @@ fun SwipeableItem(
                 }
                 .offset {
                     IntOffset(
-                        x = if (state.isUserSwiping) {
+                        x = if (state.isBeingSwiped) {
                             // The user is currently swiping the item, so here we apply the offset
                             // immediately to ensure the user's pointer input is followed as quickly
                             // as possible and without potential animation delays (even though we
@@ -321,7 +321,7 @@ fun SwipeableItem(
                     },
                 )
                 .then(
-                    other = if (clickIndication != null && !state.isUserSwiping && (onClick != null || onLongClick != null)) {
+                    other = if (clickIndication != null && !state.isBeingSwiped && (onClick != null || onLongClick != null)) {
                         // The clipped click indication needs to be added here at the end so that
                         // it's shifted appropriately by the offset applied above.
                         Modifier
@@ -678,7 +678,7 @@ private suspend fun AwaitPointerEventScope.handleSwipeGestures(
         }
     }
 
-    if (state.isUserSwiping) {
+    if (state.isBeingSwiped) {
         // Finally, now that the swiping has ended, let's see if we should dismiss the item or not
         val speedRatioThreshold = 0.12f
         val horizontalPadding = contentStartPaddingInPx + contentEndPaddingInPx

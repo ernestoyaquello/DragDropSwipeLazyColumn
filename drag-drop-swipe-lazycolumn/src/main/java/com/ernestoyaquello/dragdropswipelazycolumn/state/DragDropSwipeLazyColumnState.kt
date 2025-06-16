@@ -1,11 +1,13 @@
 package com.ernestoyaquello.dragdropswipelazycolumn.state
 
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.ernestoyaquello.dragdropswipelazycolumn.DragDropSwipeLazyColumn
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentSetOf
 
@@ -26,17 +28,19 @@ class DragDropSwipeLazyColumnState internal constructor(
     )
 
     /**
-     * The [LazyListState] underlying this enhanced lazy list implementation.
+     * The [LazyListState] used by the [LazyColumn] powering the [DragDropSwipeLazyColumn].
      */
     val lazyListState get() = internalState.value.lazyListState
 
     /**
      * The key of the item that is currently being dragged by the user, if any.
+     * Only one item can be dragged at a time.
      */
     val draggedItemKey get() = internalState.value.draggedItemKey
 
     /**
      * The keys of the items that are currently being swiped by the user.
+     * This set can contain multiple keys, as multiple items can be swiped at the same time.
      */
     val swipedItemKeys get() = internalState.value.swipedItemKeys
 

@@ -209,7 +209,12 @@ private fun TaskList(
         state = state,
         items = tasks,
         key = remember { { it.id } },
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = 16.dp,
+            end = 16.dp,
+            bottom = 32.dp + 56.dp, // FAB's height (56.dp) + vertical padding around it (16.dp * 2)
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         onIndicesChangedViaDragAndDrop = onReorderedTasks,
     ) { index, task ->

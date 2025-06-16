@@ -64,7 +64,6 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
@@ -115,6 +114,7 @@ import kotlin.time.Duration.Companion.nanoseconds
  *  need to use [Modifier.overscroll] separately.
  * @param onIndicesChangedViaDragAndDrop The callback that will be invoked when the user drops an
  *  item after dragging it, which will contain a list with all the items whose indices have changed.
+ *  This list will contain the dropped item and the ones shifted to accommodate its repositioning.
  * @param itemContentIndexed The content displayed by a single item. Here, you must use
  *  [DraggableSwipeableItem] as the only root composable to implement the layout of each item.
  */
@@ -202,27 +202,10 @@ fun <TItem> DragDropSwipeLazyColumn(
             }
 
             // Also track if this item is being swiped
-            if (swipeableItemState.isUserSwiping && !state.swipedItemKeys.contains(itemKey)) {
+            if (swipeableItemState.isBeingSwiped && !state.swipedItemKeys.contains(itemKey)) {
                 state.update { copy(swipedItemKeys = (swipedItemKeys + itemKey).toImmutableSet()) }
-            } else if (!swipeableItemState.isUserSwiping && state.swipedItemKeys.contains(itemKey)) {
+            } else if (!swipeableItemState.isBeingSwiped && state.swipedItemKeys.contains(itemKey)) {
                 state.update { copy(swipedItemKeys = (swipedItemKeys - itemKey).toImmutableSet()) }
-            }
-
-            // Apply pending offset corrections if needed, which are used to ensure the item remains
-            // in the same place within the list despite having changed its index (the index change
-            // will cause the item to be repositioned, hence this offset correction, which will keep
-            // it floating right where it was before the index change).
-            if (itemState.pendingReorderOffsetCorrection != 0f && index == item.newIndex) {
-                itemState.update {
-                    copy(
-                        offsetTargetInPx = if (isBeingDragged) {
-                            offsetTargetInPx + pendingReorderOffsetCorrection
-                        } else {
-                            offsetTargetInPx
-                        },
-                        pendingReorderOffsetCorrection = 0f,
-                    )
-                }
             }
 
             val scope = remember(
@@ -308,28 +291,6 @@ fun <TItem> DragDropSwipeLazyColumn(
     }
 }
 
-/**
- * This method will make sure to process [itemsToReorder] to return them in their new correct order.
- * It is expected to be invoked on the list of updated items returned as a parameter by the callback
- * "onIndicesChangedViaDragAndDrop", which is defined within [DragDropSwipeLazyColumn].
- *
- * While it can be useful to easily update the source of truth with the reordered items, it is not
- * very efficient, as it returns the complete list of items, reordered, without indicating which
- * ones have been moved and which ones haven't. Thus, it's mostly indicated for testing purposes
- * (for example, the previews of this library use it). In real scenarios, just update the few items
- * that have been reordered in your database, then update the UI with the new list of items.
- */
-fun <TItem> List<OrderedItem<TItem>>.toReorderedItems(
-    itemsToReorder: List<TItem>,
-) = itemsToReorder
-    .toMutableList()
-    .also {
-        this.forEach { itemToUpdate ->
-            it[itemToUpdate.newIndex] = itemToUpdate.value
-        }
-    }
-    .toImmutableList()
-
 @Composable
 private fun ApplyOffsetIfNeeded(
     itemState: DraggableSwipeableItemState,
@@ -373,8 +334,9 @@ private fun <TItem> ReorderItemsIfNeeded(
     key: (TItem) -> Any,
     onItemsReordered: (ImmutableList<OrderedItem<TItem>>) -> Unit,
 ) {
-    if (visibleListHeightInPx == 0f || !itemState.isBeingDragged) {
-        // The list's height hasn't been measured yet or the item isn't being dragged
+    if (visibleListHeightInPx == 0f) {
+        // The list's height hasn't been measured yet
+        itemState.update { copy(currentDragIndex = null) }
         return
     }
 
@@ -395,12 +357,17 @@ private fun <TItem> ReorderItemsIfNeeded(
                 val updatedOffsetTargetInPx = offsetTargetInPx * (if (!layoutReversed) 1f else -1f)
                 updatedOffsetTargetInPx to layoutInfo
             }
+            .filter { (offsetTargetInPx, _) -> offsetTargetInPx != 0f }
+            .distinctUntilChanged()
             .map { (offsetTargetInPx, layoutInfo) ->
                 val draggedItemInfo = layoutInfo.visibleItemsInfo.find {
                     it.key == itemState.itemKey
                 }
                 if (draggedItemInfo == null) {
                     // The dragged item is not visible anymore, so we don't need to handle it here
+                    itemState.update {
+                        copy(currentDragIndex = currentDragIndex?.takeUnless { !itemState.isBeingDragged })
+                    }
                     return@map null
                 }
 
@@ -458,19 +425,17 @@ private fun <TItem> ReorderItemsIfNeeded(
                     reorderedItems to offsetCorrection
                 } else {
                     // The dragged item is still closer to its original position than to any other
-                    // item in the list, so we don't need to swap it with any other item yet.
+                    // item in the list, so we don't need to swap it with any other item yet. Still,
+                    // we need to update the current drag index for the item.
+                    itemState.update {
+                        copy(currentDragIndex = closestItemInfo.index.takeUnless { !itemState.isBeingDragged })
+                    }
                     null
                 }
             }
             .filterNotNull()
             .distinctUntilChanged()
-            .collectLatest { (reorderedItems, offsetCorrection) ->
-                itemState.update {
-                    // We don't apply the offset correction immediately, as it will only make sense
-                    // once the item is repositioned within the list. Instead, we set it as pending.
-                    copy(pendingReorderOffsetCorrection = pendingReorderOffsetCorrection + offsetCorrection)
-                }
-
+            .collect { (reorderedItems, offsetCorrection) ->
                 // Find the actual first visible item (sometimes, the list of visible items contains
                 // items that are already fully out of view). Then, if the dragged item has become
                 // (or has stopped being) the first visible one, apply a small correction to ensure
@@ -486,10 +451,10 @@ private fun <TItem> ReorderItemsIfNeeded(
                         itemTopHiddenSize < itemInfo.size
                     }
                     .minByOrNull { it.index }
+                val reorderedDraggedItem = reorderedItems.first {
+                    key(it.value) == key(draggedItem.value)
+                }
                 if (firstVisibleItemInfo != null) {
-                    val reorderedDraggedItem = reorderedItems.first {
-                        key(it.value) == key(draggedItem.value)
-                    }
                     if (firstVisibleItemInfo.index == reorderedDraggedItem.newIndex || firstVisibleItemInfo.index == draggedItem.newIndex) {
                         lazyListState.requestScrollToItem(
                             index = firstVisibleItemInfo.index,
@@ -498,7 +463,22 @@ private fun <TItem> ReorderItemsIfNeeded(
                     }
                 }
 
-                itemState.update { copy(pendingReorderCallbackInvocation = true) }
+                itemState.update {
+                    copy(
+                        // Apply an offset correction to the dragged item so that it appears where
+                        // it should after being reordered into a new position, as the current
+                        // offset will stop making sense after the reordering.
+                        offsetTargetInPx = offsetTargetInPx + offsetCorrection,
+
+                        // Update the current drag index to the new one now that the dragged item
+                        // has been moved to its new position.
+                        currentDragIndex = reorderedDraggedItem.newIndex.takeUnless { !itemState.isBeingDragged },
+
+                        // Indicate that the item has been reordered via dragging at least once,
+                        // which means that might need to invoke the reorder callback later.
+                        pendingReorderCallbackInvocation = true,
+                    )
+                }
                 onItemsReordered(reorderedItems)
             }
     }
@@ -671,8 +651,8 @@ private fun <TItem> forceDropDraggedItem(
         itemState.update {
             copy(
                 isBeingDragged = false,
+                currentDragIndex = null,
                 offsetTargetInPx = 0f,
-                pendingReorderOffsetCorrection = 0f,
                 pendingReorderCallbackInvocation = false,
             )
         }

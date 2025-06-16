@@ -312,6 +312,7 @@ private suspend fun AwaitPointerEventScope.handleDragDropGestures(
         itemState.update {
             copy(
                 isBeingDragged = false,
+                currentDragIndex = null,
                 offsetTargetInPx = 0f,
             )
         }

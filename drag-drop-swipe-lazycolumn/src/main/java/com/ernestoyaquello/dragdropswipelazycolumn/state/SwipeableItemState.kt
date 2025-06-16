@@ -38,27 +38,33 @@ class SwipeableItemState internal constructor(
     /**
      * Specifies which swipe directions are allowed for this item.
      */
-    val allowedSwipeDirections get() = internalState.value.allowedSwipeDirections
+    val allowedSwipeDirections
+        get() = internalState.value.allowedSwipeDirections
 
     /**
      * Indicates the direction in which the user is currently swiping the item.
      */
-    val ongoingSwipeDirection get() = internalState.value.ongoingSwipeDirection
+    val ongoingSwipeDirection
+        get() = internalState.value.ongoingSwipeDirection
 
     /**
      * Indicates whether the user is currently swiping the item.
      */
-    val isUserSwiping get() = ongoingSwipeDirection != NotSwiping
+    val isBeingSwiped
+        get() = ongoingSwipeDirection != NotSwiping
 
     /**
      * Indicates whether the item is currently dismissed or being being animated into its dismissal,
      * which will only happen if the user swiped it (and released it) far enough and/or fast enough.
      */
-    val isItemDismissedOrBeingDismissed get() = internalState.value.dismissalTriggered
+    val isItemDismissedOrBeingDismissed
+        get() = internalState.value.dismissalTriggered
 
-    internal val offsetTargetInPx get() = internalState.value.offsetTargetInPx
+    internal val offsetTargetInPx
+        get() = internalState.value.offsetTargetInPx
 
-    internal val lastVelocity get() = internalState.value.lastVelocity
+    internal val lastVelocity
+        get() = internalState.value.lastVelocity
 
     internal val isSwipeAllowed
         get() = !internalState.value.forceDisableSwipe && (
