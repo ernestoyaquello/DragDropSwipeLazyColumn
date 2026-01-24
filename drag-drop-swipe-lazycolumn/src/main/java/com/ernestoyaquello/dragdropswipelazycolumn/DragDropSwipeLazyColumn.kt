@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.OverscrollEffect
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollableDefaults
@@ -82,42 +83,43 @@ import kotlin.time.Duration.Companion.nanoseconds
  *
  * @param modifier The [Modifier] instance to apply to this layout.
  * @param state The state object of type [DragDropSwipeLazyColumnState] to be used to control or
- *  observe the list's state.
+ *   observe the list's state.
  * @param items The items to be displayed in the list.
  * @param key A factory of stable and unique keys representing each item.
- *  Using the same key for multiple items in the list is not allowed.
- *  The type of the key should be saveable via Bundle on Android.
- *  The scroll position will be maintained based on the item key, which means if you add/remove
- *  items before the current visible item, the item with the given key will be kept as the first
- *  visible one. This can be overridden by calling [LazyListState.requestScrollToItem].
+ *   Using the same key for multiple items in the list is not allowed.
+ *   The type of the key should be saveable via Bundle on Android.
+ *   The scroll position will be maintained based on the item key, which means if you add/remove
+ *   items before the current visible item, the item with the given key will be kept as the first
+ *   visible one. This can be overridden by calling [LazyListState.requestScrollToItem].
  * @param contentType A factory of the content types for the item. The item compositions of the same
- *  type could be reused more efficiently. Note that null is a valid type and items of such type
- *  will be considered compatible.
+ *   type could be reused more efficiently. Note that null is a valid type and items of such type
+ *   will be considered compatible.
  * @param contentPadding A padding around the whole content. This will add padding for the content
- *  after it has been clipped, which is not possible via modifier param. You can use it to add a
- *  padding before the first item or after the last one. If you want to add a spacing between each
- *  item, use [verticalArrangement].
+ *   after it has been clipped, which is not possible via modifier param. You can use it to add a
+ *   padding before the first item or after the last one. If you want to add a spacing between each
+ *   item, use [verticalArrangement].
  * @param reverseLayout Indicates whether the direction of scrolling and layout should be reversed.
- *  If `true`, items are laid out in reverse order and `LazyListState.firstVisibleItemIndex == 0`
- *  means that the column is scrolled to the bottom. Note that this parameter does not change the
- *  behavior of [verticalArrangement].
+ *   If `true`, items are laid out in reverse order and `LazyListState.firstVisibleItemIndex == 0`
+ *   means that the column is scrolled to the bottom. Note that this parameter does not change the
+ *   behavior of [verticalArrangement].
  * @param verticalArrangement The vertical arrangement of the layout's children. This allows to add
- *  a spacing between items, and to specify their arrangement when we have not enough items to fill
- *  the whole minimum size.
+ *   a spacing between items, and to specify their arrangement when we have not enough items to fill
+ *   the whole minimum size.
  * @param horizontalAlignment The horizontal alignment applied to the items.
  * @param flingBehavior The logic describing the fling behavior to apply.
  * @param userScrollEnabled Indicates whether the scrolling via the user gestures or accessibility
- *  actions is allowed. You can still scroll programmatically using the state even when it is
- *  disabled.
+ *   actions is allowed. You can still scroll programmatically using the state even when it is
+ *   disabled.
  * @param overscrollEffect the [OverscrollEffect] that will be used to render overscroll for this
- *  layout. Note that the [OverscrollEffect.node] will be applied internally as well, so you do not
- *  need to use [Modifier.overscroll] separately.
+ *   layout. Note that the [OverscrollEffect.node] will be applied internally as well, so you do not
+ *   need to use [Modifier.overscroll] separately.
  * @param onIndicesChangedViaDragAndDrop The callback that will be invoked when the user drops an
- *  item after dragging it, which will contain a list with all the items whose indices have changed.
- *  This list will contain the dropped item and the ones shifted to accommodate its repositioning.
+ *   item after dragging it, which will contain a list with all the items whose indices have changed.
+ *   This list will contain the dropped item and the ones shifted to accommodate its repositioning.
  * @param itemContentIndexed The content displayed by a single item. Here, you must use
- *  [DraggableSwipeableItem] as the only root composable to implement the layout of each item.
+ *   [DraggableSwipeableItem] as the only root composable to implement the layout of each item.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun <TItem> DragDropSwipeLazyColumn(
     modifier: Modifier = Modifier,

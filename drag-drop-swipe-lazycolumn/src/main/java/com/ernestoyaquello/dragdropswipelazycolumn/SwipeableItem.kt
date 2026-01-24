@@ -110,23 +110,23 @@ import kotlin.math.sign
  * @param contentStartPadding The padding to be applied at the start of the item content.
  * @param contentEndPadding The padding to be applied at the end of the item content.
  * @param minSwipeHorizontality The minimum horizontal delta to vertical delta ratio required for a
- *  horizontal swipe gesture to be considered a valid swipe start. The higher this value, the more
- *  "horizontal" the swipe gesture must be for it to be actually handled as a swipe. A `null` means
- *  no minimum horizontality for a horizontal swipe to be considered as such.
+ *   horizontal swipe gesture to be considered a valid swipe start. The higher this value, the more
+ *   "horizontal" the swipe gesture must be for it to be actually handled as a swipe. A `null` means
+ *   no minimum horizontality for a horizontal swipe to be considered as such.
  * @param clickIndication The click indication to be applied to the item when it is clicked. It will
- *  only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
- *  swiped.
+ *   only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
+ *   swiped.
  * @param onClick The callback to be invoked when the item is clicked. It will only be invoked if
- *  the item is not being swiped.
+ *   the item is not being swiped.
  * @param onLongClick The callback to be invoked when the item is long-clicked. It will only be
- *  invoked if the item is not being swiped.
+ *   invoked if the item is not being swiped.
  * @param onSwipeGestureStart The callback to be invoked when the user starts swiping the item.
  * @param onSwipeGestureUpdate The callback to be invoked when the user is swiping the item and a
- *  swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
+ *   swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
  * @param onSwipeGestureFinish The callback to be invoked when the user finishes swiping the item.
  * @param onSwipeDismiss The callback to be invoked when the user swipes the item far enough and/or
- *  fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
- *  will be provided as a parameter.
+ *   fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
+ *   will be provided as a parameter.
  * @param content The content of the item.
  */
 @Composable
@@ -156,7 +156,7 @@ fun SwipeableItem(
         Animatable(initialValue = state.offsetTargetInPx, typeConverter = Float.VectorConverter)
     }
 
-    // Ensure swipe actions that are cancelled don't result in the item being dismissed
+    // Ensure swipe actions that are canceled don't result in the item being dismissed
     if (!state.isSwipeAllowed) {
         state.update {
             copy(
@@ -360,7 +360,7 @@ private fun ApplySwipeOffsetIfNeeded(
         onItemIsBouncingUpdated,
         onDismissedViaSwiping,
     ) {
-        // Do this immediately just in case the value was left as true in a cancelled invocation
+        // Do this immediately just in case the value was left as true in a canceled invocation
         onItemIsBouncingUpdated(false)
 
         // Either move immediately to wherever the user is swiping to, or animate to the target

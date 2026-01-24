@@ -44,15 +44,15 @@ class DraggableSwipeableItemScope<TItem> internal constructor(
      * top-most modifier of [DraggableSwipeableItem].
      *
      * @param fadeInSpec The animation specs to use for animating the item appearance. Null means no
-     *  appearance animation.
+     *   appearance animation.
      * @param placementSpecDefault The animation specs that will be used to animate the item
-     *  placement when no dragging is taking place. Null means no default placement animation when
-     *  no item is being dragged.
+     *   placement when no dragging is taking place. Null means no default placement animation when
+     *   no item is being dragged.
      * @param placementSpecWhenAnyItemIsBeingDragged The animation specs that will be used to
-     *  animate the item placement when an item is being dragged. Null means no placement animation
-     *  when an item is being dragged.
+     *   animate the item placement when an item is being dragged. Null means no placement animation
+     *   when an item is being dragged.
      * @param fadeOutSpec The animation specs to use for animating the item disappearance. Null
-     *  means no disappearance animation.
+     *   means no disappearance animation.
      */
     fun Modifier.animateDraggableSwipeableItem(
         fadeInSpec: FiniteAnimationSpec<Float>? = spring(

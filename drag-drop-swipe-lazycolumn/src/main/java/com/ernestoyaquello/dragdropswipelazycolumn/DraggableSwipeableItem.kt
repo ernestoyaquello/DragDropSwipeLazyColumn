@@ -53,41 +53,41 @@ import kotlin.math.roundToInt
  * This item must be used as the root composable for the item content of [DragDropSwipeLazyColumn].
  *
  * @param modifier The [Modifier] to be applied to the item.
- *  Here is where you can apply `animateDraggableSwipeableItem()` to enable item animations.
- *  Don't use this modifier to apply padding around the item container. For that, use the vertical
- *  arrangement and the content padding of the [DragDropSwipeLazyColumn] composable.
+ *   Here is where you can apply `animateDraggableSwipeableItem()` to enable item animations.
+ *   Don't use this modifier to apply padding around the item container. For that, use the vertical
+ *   arrangement and the content padding of the [DragDropSwipeLazyColumn] composable.
  * @param colors The colors to be used for the item.
  * @param shapes The shapes to be used for the item.
  * @param icons The icons to be used for the item.
  * @param minHeight The minimum height of the item.
  * @param minSwipeHorizontality The minimum horizontal delta to vertical delta ratio required for a
- *  horizontal swipe gesture to be considered a valid swipe start. The higher this value, the more
- *  "horizontal" the swipe gesture must be for it to be actually handled as a swipe. A `null` means
- *  no minimum horizontality for a horizontal swipe to be considered as such.
+ *   horizontal swipe gesture to be considered a valid swipe start. The higher this value, the more
+ *   "horizontal" the swipe gesture must be for it to be actually handled as a swipe. A `null` means
+ *   no minimum horizontality for a horizontal swipe to be considered as such.
  * @param allowedSwipeDirections The allowed swipe directions for the item.
  * @param dragDropEnabled Indicates whether the drag-and-drop functionality is enabled for the item.
  * @param applyShadowElevationWhenDragged Indicates whether a shadow elevation should be applied to
- *  the item while it is being dragged.
+ *   the item while it is being dragged.
  * @param shadowElevationWhenDragged The shadow elevation to be applied to the item while it is
- *  being dragged. It will only be applied if [applyShadowElevationWhenDragged] is set to `true`.
+ *   being dragged. It will only be applied if [applyShadowElevationWhenDragged] is set to `true`.
  * @param clickIndication The click indication to be applied to the item when it is clicked. It will
- *  only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
- *  dragged or swiped.
+ *   only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
+ *   dragged or swiped.
  * @param onClick The callback to be invoked when the item is clicked. It will only be invoked if
- *  the item is not being dragged or swiped.
+ *   the item is not being dragged or swiped.
  * @param onLongClick The callback to be invoked when the item is long-clicked. It will only be
- *  invoked if the item is not being dragged or swiped.
+ *   invoked if the item is not being dragged or swiped.
  * @param onDragStart The callback to be invoked when the user starts dragging the item.
  * @param onDragUpdate The callback to be invoked when the user is dragging the item and a drag
- *  delta in pixels is detected, meaning that the user has dragged the item by some amount.
+ *   delta in pixels is detected, meaning that the user has dragged the item by some amount.
  * @param onDragFinish The callback to be invoked when the user finishes dragging the item.
  * @param onSwipeGestureStart The callback to be invoked when the user starts swiping the item.
  * @param onSwipeGestureUpdate The callback to be invoked when the user is swiping the item and a
- *  swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
+ *   swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
  * @param onSwipeGestureFinish The callback to be invoked when the user finishes swiping the item.
  * @param onSwipeDismiss The callback to be invoked when the user swipes the item far enough and/or
- *  fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
- *  will be provided as a parameter.
+ *   fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
+ *   will be provided as a parameter.
  * @param content The content of the item.
  */
 @Composable

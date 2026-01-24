@@ -169,7 +169,8 @@ val taskPool = listOf(
     "Draw stick figure masterpiece",
     "Invent secret handshake",
     "Check horoscope ironically",
-    "Send cryptic text",
+    // Longer item to test if things work fine with very tall items
+    "Send cryptic text. Actually, the cryptic text could just be Lorem Ipsum, you know? Most people don't know what \"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua (...)\" means!",
     "Practice ninja moves",
     "Play hide and seek solo",
     "Review your fridge magnets",

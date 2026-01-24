@@ -86,16 +86,16 @@ data class DraggableSwipeableItemColors private constructor(
          * 
          * @param containerBackgroundColor The background color of the item container.
          * @param containerBackgroundColorWhileDragged The background color of the item container
-         *  while it is being dragged.
+         *   while it is being dragged.
          * @param clickIndicationColor The color of the click indication when the item is clicked.
          * @param behindLeftToRightSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from left to right.
+         *   container shown behind the item while the item is being swiped from left to right.
          * @param behindLeftToRightSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from left to right.
+         *   the item is being swiped from left to right.
          * @param behindRightToLeftSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from right to left.
+         *   container shown behind the item while the item is being swiped from right to left.
          * @param behindRightToLeftSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from right to left.
+         *   the item is being swiped from right to left.
          */
         @Composable
         fun createRemembered(
@@ -134,16 +134,16 @@ data class DraggableSwipeableItemColors private constructor(
          *
          * @param containerBackgroundColor The background color of the item container.
          * @param containerBackgroundColorWhileDragged The background color of the item container
-         *  while it is being dragged.
+         *   while it is being dragged.
          * @param clickIndicationColor The color of the click indication when the item is clicked.
          * @param behindStartToEndSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from start to end.
+         *   container shown behind the item while the item is being swiped from start to end.
          * @param behindStartToEndSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from start to end.
+         *   the item is being swiped from start to end.
          * @param behindEndToStartSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from end to start.
+         *   container shown behind the item while the item is being swiped from end to start.
          * @param behindEndToStartSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from end to start.
+         *   the item is being swiped from end to start.
          */
         @Composable
         fun createRememberedWithLayoutDirection(
@@ -182,12 +182,12 @@ data class DraggableSwipeableItemColors private constructor(
          *
          * @param containerBackgroundColor The background color of the item container.
          * @param containerBackgroundColorWhileDragged The background color of the item container
-         *  while it is being dragged.
+         *   while it is being dragged.
          * @param clickIndicationColor The color of the click indication when the item is clicked.
          * @param behindSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped in any direction.
+         *   container shown behind the item while the item is being swiped in any direction.
          * @param behindSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped in any direction.
+         *   the item is being swiped in any direction.
          */
         @Composable
         fun createRemembered(

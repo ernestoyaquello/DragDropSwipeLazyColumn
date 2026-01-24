@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Spring.DampingRatioNoBouncy
 import androidx.compose.animation.core.Spring.StiffnessMedium
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -78,7 +79,7 @@ import kotlin.math.roundToInt
  * @param items The items to be displayed within the lazy column.
  * @param key A function that returns a unique key for each item.
  * @param content The composable with the list, which will be provided with a `content.listModifier`
- *  and a `content.getItemModifier()`. These modifiers must be used for the enhancements to work.
+ *   and a `content.getItemModifier()`. These modifiers must be used for the enhancements to work.
  */
 @Composable
 fun <TItem> LazyColumnEnhancingWrapper(
@@ -235,6 +236,7 @@ fun <TItem> LazyColumnEnhancingWrapper(
     content(listModifier, getItemModifier)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 @MultiPreview
 private fun LazyColumnEnhancingWrapper_InteractivePreview() {

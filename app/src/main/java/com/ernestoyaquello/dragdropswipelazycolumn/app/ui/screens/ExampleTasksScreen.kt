@@ -2,6 +2,7 @@ package com.ernestoyaquello.dragdropswipelazycolumn.app.ui.screens
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
@@ -159,6 +161,7 @@ private fun Loading(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Content(
     modifier: Modifier,
@@ -168,7 +171,9 @@ private fun Content(
     onTaskLongClick: (ExampleTask) -> Unit,
     onTaskSwipeDismiss: (ExampleTask, Boolean) -> Unit,
 ) {
-    val listState = rememberDragDropSwipeLazyColumnState()
+    val listState = rememberDragDropSwipeLazyColumnState(
+        cacheWindow = LazyLayoutCacheWindow(ahead = 128.dp, behind = 128.dp),
+    )
 
     // The LazyColumnEnhancingWrapper is not strictly needed. If we just wanted to have
     // drag & drop and swipe gesture support, a DragDropSwipeLazyColumn is all we would

@@ -96,13 +96,13 @@ data class SwipeableItemColors internal constructor(
          * @param containerBackgroundColor The background color of the item container.
          * @param clickIndicationColor The color of the click indication when the item is clicked.
          * @param behindLeftToRightSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from left to right.
+         *   container shown behind the item while the item is being swiped from left to right.
          * @param behindLeftToRightSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from left to right.
+         *   the item is being swiped from left to right.
          * @param behindRightToLeftSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from right to left.
+         *   container shown behind the item while the item is being swiped from right to left.
          * @param behindRightToLeftSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from right to left.
+         *   the item is being swiped from right to left.
          */
         @Composable
         fun createRemembered(
@@ -142,13 +142,13 @@ data class SwipeableItemColors internal constructor(
          * @param containerBackgroundColor The background color of the item container.
          * @param clickIndicationColor The color of the click indication when the item is clicked.
          * @param behindStartToEndSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from start to end.
+         *   container shown behind the item while the item is being swiped from start to end.
          * @param behindStartToEndSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from start to end.
+         *   the item is being swiped from start to end.
          * @param behindEndToStartSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped from end to start.
+         *   container shown behind the item while the item is being swiped from end to start.
          * @param behindEndToStartSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped from end to start.
+         *   the item is being swiped from end to start.
          */
         @Composable
         fun createRememberedWithLayoutDirection(
@@ -208,9 +208,9 @@ data class SwipeableItemColors internal constructor(
          * @param containerBackgroundColor The background color of the item container.
          * @param clickIndicationColor The color of the click indication when the item is clicked.
          * @param behindSwipeContainerBackgroundColor The background color of the
-         *  container shown behind the item while the item is being swiped in any direction.
+         *   container shown behind the item while the item is being swiped in any direction.
          * @param behindSwipeIconColor The color of the icon shown behind the item while
-         *  the item is being swiped in any direction.
+         *   the item is being swiped in any direction.
          */
         @Composable
         fun createRemembered(
@@ -258,9 +258,9 @@ data class SwipeableItemShapes private constructor(
          *
          * @param containerBackgroundShape The shape of the item container.
          * @param behindLeftToRightSwipeContainerShape The shape of the container shown behind the
-         *  item while the item is being swiped from left to right.
+         *   item while the item is being swiped from left to right.
          * @param behindRightToLeftSwipeContainerShape The shape of the container shown behind the
-         *  item while the item is being swiped from right to left.
+         *   item while the item is being swiped from right to left.
          */
         @Composable
         fun createRemembered(
@@ -284,9 +284,9 @@ data class SwipeableItemShapes private constructor(
          *
          * @param containerBackgroundShape The shape of the item container.
          * @param behindStartToEndSwipeContainerShape The shape of the container shown behind the
-         *  item while the item is being swiped from start to end.
+         *   item while the item is being swiped from start to end.
          * @param behindEndToStartSwipeContainerShape The shape of the container shown behind the
-         *  item while the item is being swiped from end to start.
+         *   item while the item is being swiped from end to start.
          */
         @Composable
         fun createRememberedWithLayoutDirection(
@@ -322,7 +322,7 @@ data class SwipeableItemShapes private constructor(
          *
          * @param containerBackgroundShape The shape of the item container.
          * @param behindSwipeContainerShape The shape of the container shown behind the
-         *  item while the item is being swiped in any direction.
+         *   item while the item is being swiped in any direction.
          */
         @Composable
         fun createRemembered(
@@ -338,7 +338,7 @@ data class SwipeableItemShapes private constructor(
          * Creates a [SwipeableItemShapes] instance with the specified shapes.
          *
          * @param containerBackgroundShape The shape of the item container, which will also be used
-         *  for the containers shown behind the item while the item is being swiped.
+         *   for the containers shown behind the item while the item is being swiped.
          */
         @Composable
         fun createRemembered(
@@ -396,19 +396,19 @@ data class SwipeableItemIcons private constructor(
          * Creates a remembered instance of [SwipeableItemIcons] with the specified icons.
          *
          * @param behindLeftToRightSwipeIconSwipeStarting The icon to show when the user starts
-         *  swiping the item from left to right.
+         *   swiping the item from left to right.
          * @param behindRightToLeftSwipeIconSwipeStarting The icon to show when the user starts
-         *  swiping the item from right to left.
+         *   swiping the item from right to left.
          * @param behindLeftToRightSwipeIconSwipeOngoing The icon to show when the user is swiping
-         *  the item from left to right, which will only be shown if the user has swiped the item
-         *  far enough for this icon to replace [behindLeftToRightSwipeIconSwipeStarting].
+         *   the item from left to right, which will only be shown if the user has swiped the item
+         *   far enough for this icon to replace [behindLeftToRightSwipeIconSwipeStarting].
          * @param behindRightToLeftSwipeIconSwipeOngoing The icon to show when the user is swiping
-         *  the item from right to left, which will only be shown if the user has swiped the item
-         *  far enough for this icon to replace [behindRightToLeftSwipeIconSwipeStarting].
+         *   the item from right to left, which will only be shown if the user has swiped the item
+         *   far enough for this icon to replace [behindRightToLeftSwipeIconSwipeStarting].
          * @param behindLeftToRightSwipeIconSwipeFinishing The icon to show when the user has
-         *  finished the swipe from left to right and thus the item is getting dismissed.
+         *   finished the swipe from left to right and thus the item is getting dismissed.
          * @param behindRightToLeftSwipeIconSwipeFinishing The icon to show when the user has
-         *  finished the swipe from right to left and thus the item is getting dismissed.
+         *   finished the swipe from right to left and thus the item is getting dismissed.
          */
         @Composable
         fun createRemembered(
@@ -440,19 +440,19 @@ data class SwipeableItemIcons private constructor(
          * Creates a remembered instance of [SwipeableItemIcons] with the specified icons.
          *
          * @param behindStartToEndSwipeIconSwipeStarting The icon to show when the user starts
-         *  swiping the item from start to end.
+         *   swiping the item from start to end.
          * @param behindEndToStartSwipeIconSwipeStarting The icon to show when the user starts
-         *  swiping the item from end to start.
+         *   swiping the item from end to start.
          * @param behindStartToEndSwipeIconSwipeOngoing The icon to show when the user is swiping
-         *  the item from start to end, which will only be shown if the user has swiped the item
-         *  far enough for this icon to replace [behindStartToEndSwipeIconSwipeStarting].
+         *   the item from start to end, which will only be shown if the user has swiped the item
+         *   far enough for this icon to replace [behindStartToEndSwipeIconSwipeStarting].
          * @param behindEndToStartSwipeIconSwipeOngoing The icon to show when the user is swiping
-         *  the item from end to start, which will only be shown if the user has swiped the item
-         *  far enough for this icon to replace [behindEndToStartSwipeIconSwipeStarting].
+         *   the item from end to start, which will only be shown if the user has swiped the item
+         *   far enough for this icon to replace [behindEndToStartSwipeIconSwipeStarting].
          * @param behindStartToEndSwipeIconSwipeFinishing The icon to show when the user has
-         *  finished the swipe from start to end and thus the item is getting dismissed.
+         *   finished the swipe from start to end and thus the item is getting dismissed.
          * @param behindEndToStartSwipeIconSwipeFinishing The icon to show when the user has
-         *  finished the swipe from end to start and thus the item is getting dismissed.
+         *   finished the swipe from end to start and thus the item is getting dismissed.
          */
         @Composable
         fun createRememberedWithLayoutDirection(
@@ -512,12 +512,12 @@ data class SwipeableItemIcons private constructor(
          * Creates a remembered instance of [SwipeableItemIcons] with the specified icons.
          *
          * @param behindSwipeIconSwipeStarting The icon to show when the user starts swiping the
-         *  item from left to right.
+         *   item from left to right.
          * @param behindSwipeIconSwipeOngoing The icon to show when the user is swiping the item
-         *  from left to right, which will only be shown if the user has swiped the item far enough
-         *  for this icon to replace [behindSwipeIconSwipeStarting].
+         *   from left to right, which will only be shown if the user has swiped the item far enough
+         *   for this icon to replace [behindSwipeIconSwipeStarting].
          * @param behindSwipeIconSwipeFinishing The icon to show when the user has finished the
-         *  swipe from left to right and thus the item is getting dismissed.
+         *   swipe from left to right and thus the item is getting dismissed.
          */
         @Composable
         fun createRemembered(
