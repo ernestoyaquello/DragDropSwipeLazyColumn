@@ -390,9 +390,63 @@ private fun <TItem> ReorderItemsIfNeeded(
                     abs(otherItemCenter - draggedItemCenter)
                 }
 
-                // If the user has dragged the item close enough to another one, we replace that one
+                // If the user has dragged the item close enough to another one, we swap that one
                 // with the dragged item and shift the rest.
                 if (closestItemInfo.key != draggedItemInfo.key) {
+                    // Importantly, if the item being dragged would end up outside the bounds of the
+                    // list, we do not perform the swap, as that would cause the dragged item to
+                    // leave the composition – which, in turn, would cause the dragging action to
+                    // stop working (even though the user is still trying to drag the item!).
+                    //
+                    // This could happen if the item that would get swapped with the dragged one is
+                    // at the edge of the list, partially outside of it, and so much taller than the
+                    // dragged item that, even after getting moved up or down as part of the swap
+                    // with the dragged item, a portion of it would still remain outside the list,
+                    // causing the dragged item's real position within the list (which won't include
+                    // the drag offset we use to make dragged items appear to move with the user's
+                    // finger) to be totally outside of the list's bounds.
+                    //
+                    // This special case we are talking about here, where the items being swapped
+                    // can cause the dragged item to leave the composition, can be seen in this
+                    // before-and-after example, where an item is dragged down until the swap causes
+                    // its real position within the list to be out of bounds:
+                    //
+                    // ┌-------(list)-------┐     ┌-------(list)-------┐     ┌-------(list)-------┐
+                    // | ╰················╯ |     | ╰················╯ |     | ╰················╯ |
+                    // | ╭·(dragged item)·╮ |     |                    |     | ╭·(target item)··╮ |
+                    // | |                | |     |                    |     | |                | |
+                    // | ╰················╯ |     |                    |     | |                | |
+                    // | ╭·(target item)··╮ |     | ╭·(target item)··╮ |     | |                | |
+                    // | |                | |     | |                | |     | |                | |
+                    // | |                | |     | |                | |     | |                | |
+                    // | |                | |     | |╭·(dragged item)·╮|     | |                | |
+                    // └-┤----------------├-┘     └-┤|                ├┘     └-╰················╯-┘
+                    //   |                |         |╰················╯        ╭·(dragged item)·╮
+                    //   |                |         |                |         |                |
+                    //   ╰················╯         ╰················╯         ╰················╯
+                    //
+                    // Luckily, not performing a swap in these cases is fine, as eventually the swap
+                    // will happen as the user keeps making the list scroll further by dragging the
+                    // item towards its edge, which will eventually reveal enough of the tall item
+                    // for the swap to be possible without the dragged item getting out of bounds.
+                    val listBottom = layoutInfo.viewportEndOffset.toFloat()
+                    val listTop = listBottom - visibleListHeightInPx
+                    val draggedItemOffsetAfterSwap =
+                        if (draggedItemInfo.index < closestItemInfo.index) {
+                            closestItemInfo.offset + (closestItemInfo.size - draggedItemInfo.size)
+                        } else {
+                            closestItemInfo.offset
+                        }
+                    val draggedItemStartAfterSwap = draggedItemOffsetAfterSwap.toFloat()
+                    val draggedItemEndAfterSwap = draggedItemStartAfterSwap + draggedItemInfo.size
+                    val isDraggedItemVisibleAfterSwap = draggedItemEndAfterSwap > listTop &&
+                            draggedItemStartAfterSwap < listBottom
+                    if (!isDraggedItemVisibleAfterSwap) {
+                        return@map null
+                    }
+
+                    // Otherwise, if the special case explained above isn't detected, we go ahead
+                    // and perform the swap normally, shifting the necessary items appropriately.
                     val newOrderedItems = orderedItems.toMutableList()
 
                     // This correction will be necessary to ensure that, when the dragged item is
