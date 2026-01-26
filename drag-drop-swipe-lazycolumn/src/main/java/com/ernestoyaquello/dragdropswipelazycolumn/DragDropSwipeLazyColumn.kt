@@ -368,7 +368,9 @@ private fun <TItem> ReorderItemsIfNeeded(
             .filter { (offsetTargetInPx, currentDragIndex, _) ->
                 offsetTargetInPx != 0f && (currentDragIndex == null || currentDragIndex == draggedItemIndex)
             }
-            .map { (offsetTargetInPx, _, layoutInfo) -> offsetTargetInPx to layoutInfo }
+            .map { (offsetTargetInPx, _, layoutInfo) ->
+                offsetTargetInPx to layoutInfo
+            }
             .distinctUntilChanged()
             .map { (offsetTargetInPx, layoutInfo) ->
                 val draggedItemInfo = layoutInfo.visibleItemsInfo.find {
@@ -382,12 +384,23 @@ private fun <TItem> ReorderItemsIfNeeded(
                     return@map null
                 }
 
-                // Find the item the currently dragged item is the closest to
+                // Find the item the currently dragged item is the closest to, using the item's
+                // center as a reference.
                 val initialDraggedItemCenter = draggedItemInfo.offset + (draggedItemInfo.size / 2f)
-                val draggedItemCenter = initialDraggedItemCenter + offsetTargetInPx
-                val closestItemInfo = layoutInfo.visibleItemsInfo.minBy {
-                    val otherItemCenter = it.offset + (it.size / 2f)
-                    abs(otherItemCenter - draggedItemCenter)
+                val currentDraggedItemCenter = initialDraggedItemCenter + offsetTargetInPx
+                val distanceToDraggedItemCenter =
+                    abs(currentDraggedItemCenter - initialDraggedItemCenter)
+                val closestItemInfo = layoutInfo.visibleItemsInfo.minBy { otherItemInfo ->
+                    val otherItemCenter = otherItemInfo.offset + (otherItemInfo.size / 2f)
+                    val distanceToOtherCenter = abs(otherItemCenter - currentDraggedItemCenter)
+                    if (otherItemInfo.key != draggedItemInfo.key && distanceToOtherCenter == distanceToDraggedItemCenter) {
+                        // If the dragged item's center is placed in a way that causes it to have
+                        // the exact same distance to its own initial center and to another item's
+                        // center, we prioritize its own center to avoid unnecessary position swaps.
+                        distanceToOtherCenter + 1f
+                    } else {
+                        distanceToOtherCenter
+                    }
                 }
 
                 // If the user has dragged the item close enough to another one, we swap that one
@@ -411,18 +424,19 @@ private fun <TItem> ReorderItemsIfNeeded(
                     // before-and-after example, where an item is dragged down until the swap causes
                     // its real position within the list to be out of bounds:
                     //
-                    // ┌-------(list)-------┐     ┌-------(list)-------┐     ┌-------(list)-------┐
-                    // | ╰················╯ |     | ╰················╯ |     | ╰················╯ |
-                    // | ╭·(dragged item)·╮ |     |                    |     | ╭·(target item)··╮ |
-                    // | |                | |     |                    |     | |                | |
-                    // | ╰················╯ |     |                    |     | |                | |
-                    // | ╭·(target item)··╮ |     | ╭·(target item)··╮ |     | |                | |
-                    // | |                | |     | |                | |     | |                | |
-                    // | |                | |     | |                | |     | |                | |
-                    // | |                | |     | |╭·(dragged item)·╮|     | |                | |
-                    // └-┤----------------├-┘     └-┤|                ├┘     └-╰················╯-┘
-                    //   |                |         |╰················╯        ╭·(dragged item)·╮
-                    //   |                |         |                |         |                |
+                    // ┌─┬─────(list)─────┬─┐     ┌─┬─────(list)─────┬─┐     ┌─┬─────(list)─────┬─┐
+                    // │ ╰················╯ │     │ ╰················╯ │     │ ╰················╯ │
+                    // │ ╭·(dragged item)·╮ │     │                    │     │ ╭·(target item)··╮ │
+                    // │ ╎                ╎ │     │                    │     │ ╎                ╎ │
+                    // │ ╰················╯ │     │                    │     │ ╎                ╎ │
+                    // │ ╭·(target item)··╮ │     │ ╭·(target item)··╮ │     │ ╎                ╎ │
+                    // │ ╎                ╎ │     │ ╎                ╎ │     │ ╎                ╎ │
+                    // │ ╎                ╎ │     │ ╎                ╎ │     │ ╎                ╎ │
+                    // │ ╎                ╎ │     │ ╎╭·(dragged item)·╮│     │ ╎                ╎ │
+                    // └─╎────────────────╎─┘     └─╎╎────────────────╎┘     └─╎────────────────╎─┘
+                    //   ╎                ╎         ╎╰················╯        ╰················╯
+                    //   ╎                ╎         ╎                ╎         ╭·(dragged item)·╮
+                    //   ╎                ╎         ╎                ╎         ╎                ╎
                     //   ╰················╯         ╰················╯         ╰················╯
                     //
                     // Luckily, not performing a swap in these cases is fine, as eventually the swap
@@ -442,10 +456,49 @@ private fun <TItem> ReorderItemsIfNeeded(
                     val isDraggedItemVisibleAfterSwap = draggedItemEndAfterSwap > listTop &&
                             draggedItemStartAfterSwap < listBottom
                     if (!isDraggedItemVisibleAfterSwap) {
+                        // We've just discovered that swapping the dragged item to its new position
+                        // would cause it to leave the composition, so we skip the swap for now.
+                        itemState.update {
+                            copy(currentDragIndex = currentDragIndex?.takeUnless { !itemState.isBeingDragged })
+                        }
                         return@map null
                     }
 
-                    // Otherwise, if the special case explained above isn't detected, we go ahead
+                    // Additionally, before swapping positions, we also ensure that the swap won't
+                    // "backtrack" immediately, as that would get us in a loop where this callback
+                    // is invoked over and over. Basically, this is the problem we are trying to
+                    // avoid: when dragging a small item over a bigger one, there is a chance that,
+                    // as soon as the positions are exchanged, the dragged item ends up in a place
+                    // that would immediately trigger the opposite position swap (i.e., a reversal),
+                    // which could keep happening over and over until the dragged item is moved far
+                    // enough to break the loop.
+                    val closestItemJumpAbs = draggedItemInfo.size + layoutInfo.mainAxisItemSpacing
+                    val closestItemJump = if (draggedItemInfo.index < closestItemInfo.index) {
+                        -closestItemJumpAbs
+                    } else {
+                        closestItemJumpAbs
+                    }
+                    val closestItemCenter = closestItemInfo.offset + (closestItemInfo.size / 2f)
+                    val closestItemCenterAfterSwap = closestItemCenter + closestItemJump
+                    val closestItemIndexOffsetChangeAfterSwap =
+                        (closestItemInfo.size - draggedItemInfo.size)
+                            .takeIf { closestItemJump < 0f } ?: 0
+                    val draggedItemCenterAfterSwap = closestItemInfo.offset +
+                            closestItemIndexOffsetChangeAfterSwap +
+                            (draggedItemInfo.size / 2f)
+                    if (abs(draggedItemInfo.index - closestItemInfo.index) == 1 &&
+                        abs(closestItemCenterAfterSwap - currentDraggedItemCenter) <
+                        abs(draggedItemCenterAfterSwap - currentDraggedItemCenter)
+                    ) {
+                        // This swap would be undone immediately, causing a loop of swaps, so we
+                        // just skip it.
+                        itemState.update {
+                            copy(currentDragIndex = currentDragIndex?.takeUnless { !itemState.isBeingDragged })
+                        }
+                        return@map null
+                    }
+
+                    // Otherwise, if the special cases explained above aren't detected, we go ahead
                     // and perform the swap normally, shifting the necessary items appropriately.
                     val newOrderedItems = orderedItems.toMutableList()
 
@@ -519,13 +572,13 @@ private fun <TItem> ReorderItemsIfNeeded(
                 val reorderedDraggedItem = reorderedItems.first {
                     key(it.value) == key(draggedItem.value)
                 }
-                if (firstVisibleItemInfo != null) {
-                    if (firstVisibleItemInfo.index == reorderedDraggedItem.newIndex || firstVisibleItemInfo.index == draggedItem.newIndex) {
-                        lazyListState.requestScrollToItem(
-                            index = firstVisibleItemInfo.index,
-                            scrollOffset = -firstVisibleItemInfo.offset,
-                        )
-                    }
+                if (firstVisibleItemInfo != null &&
+                    (firstVisibleItemInfo.index == reorderedDraggedItem.newIndex || firstVisibleItemInfo.index == draggedItem.newIndex)
+                ) {
+                    lazyListState.requestScrollToItem(
+                        index = firstVisibleItemInfo.index,
+                        scrollOffset = -firstVisibleItemInfo.offset,
+                    )
                 }
 
                 itemState.update {
@@ -588,20 +641,20 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
             .filter { (_, currentDragIndex, _) ->
                 currentDragIndex == null || currentDragIndex == draggedItemIndex
             }
-            .map { (offsetTargetInPx, _, layoutInfo) ->
+            .map { (offsetTargetInPx, currentDragIndex, layoutInfo) ->
                 val draggedItemInfo = layoutInfo.visibleItemsInfo.find { itemInfo ->
                     itemInfo.key == itemState.itemKey
                 }
 
                 // Calculate how many pixels of the dragged item are hidden
-                if (draggedItemInfo != null) {
+                if (draggedItemInfo != null && currentDragIndex != null) {
                     val draggedItemOffset = draggedItemInfo.offset + offsetTargetInPx
                     val draggedItemEnd = draggedItemOffset + draggedItemInfo.size
                     val listEnd = layoutInfo.viewportEndOffset
                     val draggedItemEndHiddenSize = (draggedItemEnd - listEnd).coerceAtMost(
                         maximumValue = draggedItemInfo.size.toFloat(),
                     )
-                    if (draggedItemEndHiddenSize > 0f) {
+                    if (draggedItemEndHiddenSize > 0f && currentDragIndex >= draggedItemInfo.index) {
                         // The dragged item is being hidden at the end of the list,
                         // so we'll need to reveal it by scrolling to catch up to it.
                         return@map Triple(
@@ -617,7 +670,7 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
                         val draggedItemHiddenSize = (listStart - draggedItemStart).coerceAtMost(
                             maximumValue = draggedItemInfo.size.toFloat(),
                         )
-                        if (draggedItemHiddenSize > 0f) {
+                        if (draggedItemHiddenSize > 0f && currentDragIndex <= draggedItemInfo.index) {
                             // The dragged item is being hidden at the start of the list,
                             // so we'll need to reveal it by scrolling to catch up to it.
                             return@map Triple(
@@ -643,9 +696,8 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
                     val totalHiddenRatio = hiddenItemSize / itemSize
                     val centerHiddenRatio = (2f * totalHiddenRatio).coerceAtMost(1f)
                     val scroll = minScrollInPx + (maxScrollInPx - minScrollInPx) * centerHiddenRatio
-                    val consumedScroll = lazyListState.scrollBy(
-                        value = scroll * (if (isHiddenPartAtTheEnd) 1f else -1f),
-                    )
+                    val scrollToConsume = scroll * (if (isHiddenPartAtTheEnd) 1f else -1f)
+                    val consumedScroll = lazyListState.scrollBy(scrollToConsume)
                     val correctedConsumedScroll = consumedScroll * if (!layoutReversed) 1f else -1f
                     itemState.update {
                         copy(offsetTargetInPx = offsetTargetInPx + correctedConsumedScroll)
