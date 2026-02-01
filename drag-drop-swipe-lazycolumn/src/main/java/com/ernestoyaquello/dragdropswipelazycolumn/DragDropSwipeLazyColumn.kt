@@ -2,8 +2,6 @@ package com.ernestoyaquello.dragdropswipelazycolumn
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -35,20 +33,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.fastCoerceAtLeast
+import androidx.compose.ui.util.fastCoerceAtMost
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.All
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections.None
 import com.ernestoyaquello.dragdropswipelazycolumn.config.DraggableSwipeableItemColors
@@ -67,13 +67,10 @@ import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.math.sign
-import kotlin.time.Duration.Companion.nanoseconds
 
 /**
  * A lazy column with drag-and-drop reordering, as well swipe-to-dismiss functionality.
@@ -138,19 +135,26 @@ fun <TItem> DragDropSwipeLazyColumn(
     itemContentIndexed: @Composable DraggableSwipeableItemScope<TItem>.(Int, TItem) -> Unit,
 ) {
     val layoutDirection = LocalLayoutDirection.current
-    val listContentVerticalPaddingValues = remember(contentPadding, layoutDirection) {
-        with(contentPadding) {
-            PaddingValues(top = calculateTopPadding(), bottom = calculateBottomPadding())
-        }
-    }
+
     val listContentStartPadding = remember(contentPadding, layoutDirection) {
         contentPadding.calculateStartPadding(layoutDirection)
+    }
+    val listContentTopPadding = remember(contentPadding) {
+        contentPadding.calculateTopPadding()
     }
     val listContentEndPadding = remember(contentPadding, layoutDirection) {
         contentPadding.calculateEndPadding(layoutDirection)
     }
-    var listHeightInPx by remember { mutableFloatStateOf(0f) }
-    var orderedItems by remember(items) {
+    val listContentBottomPadding = remember(contentPadding) {
+        contentPadding.calculateBottomPadding()
+    }
+    val listContentVerticalPaddingValues = remember(
+        listContentTopPadding,
+        listContentBottomPadding,
+    ) {
+        PaddingValues(top = listContentTopPadding, bottom = listContentBottomPadding)
+    }
+    val orderedItemsState = remember(items) {
         mutableStateOf(
             value = items
                 .mapIndexed { index, item ->
@@ -162,15 +166,21 @@ fun <TItem> DragDropSwipeLazyColumn(
                 .toImmutableList(),
         )
     }
+    val lastDroppedItemState = remember {
+        mutableStateOf<OrderedItem<TItem>?>(null)
+    }
+    val onDraggedItemDropped = remember(
+        onIndicesChangedViaDragAndDrop,
+        lastDroppedItemState,
+    ) {
+        { reorderedItems: List<OrderedItem<TItem>>, droppedItem: OrderedItem<TItem>? ->
+            onIndicesChangedViaDragAndDrop(reorderedItems)
+            lastDroppedItemState.value = droppedItem
+        }
+    }
 
     LazyColumn(
-        modifier = modifier.onSizeChanged {
-            // Measuring the height of the list will help us to know where exactly the top edge of
-            // it is, as the measures provided by the lazy list state do not allow us to know that
-            // (interestingly, we can know the bottom edge via layoutInfo.viewportEndOffset, so we
-            // can calculate the top edge by subtracting the height of the list).
-            listHeightInPx = it.height.toFloat()
-        },
+        modifier = modifier,
         state = state.lazyListState,
         // Horizontal padding will be applied by each item individually
         contentPadding = listContentVerticalPaddingValues,
@@ -182,7 +192,7 @@ fun <TItem> DragDropSwipeLazyColumn(
         overscrollEffect = overscrollEffect,
     ) {
         itemsIndexed(
-            items = orderedItems,
+            items = orderedItemsState.value,
             key = { _, item -> key(item.value) },
             contentType = { _, item -> contentType(item.value) },
         ) { index, item ->
@@ -193,6 +203,11 @@ fun <TItem> DragDropSwipeLazyColumn(
                     itemKey = itemKey,
                     swipeableItemState = swipeableItemState,
                 )
+            }
+
+            val indexState = remember { mutableIntStateOf(index) }
+            LaunchedEffect(index) {
+                indexState.intValue = index
             }
 
             // Track if this item is being dragged, but at the list level, as only one item will be
@@ -235,7 +250,6 @@ fun <TItem> DragDropSwipeLazyColumn(
             // ensure the item is displayed at the correct position by applying the right offset.
             ApplyOffsetIfNeeded(
                 itemState = itemState,
-                animatedDragDropOffsetInPx = itemState.animatedOffsetInPx,
             )
 
             // If the user drags the item above or below the edges of the list, we need to scroll
@@ -243,10 +257,8 @@ fun <TItem> DragDropSwipeLazyColumn(
             ScrollToRevealDraggedItemIfNeeded(
                 itemState = itemState,
                 lazyListState = state.lazyListState,
+                currentItemIndexState = indexState,
                 layoutReversed = reverseLayout,
-                draggedItem = item,
-                draggedItemIndex = index,
-                visibleListHeightInPx = listHeightInPx,
             )
 
             // If the item being dragged gets too close to where another item is, we need to swap
@@ -256,14 +268,12 @@ fun <TItem> DragDropSwipeLazyColumn(
             ReorderItemsIfNeeded(
                 itemState = itemState,
                 lazyListState = state.lazyListState,
+                orderedItemsState = orderedItemsState,
+                currentItemIndexState = indexState,
                 layoutReversed = reverseLayout,
-                orderedItems = orderedItems,
-                draggedItem = item,
-                draggedItemIndex = index,
-                visibleListHeightInPx = listHeightInPx,
                 key = key,
                 onItemsReordered = { reorderedItems ->
-                    orderedItems = reorderedItems
+                    orderedItemsState.value = reorderedItems
                 },
             )
 
@@ -272,8 +282,13 @@ fun <TItem> DragDropSwipeLazyColumn(
             // updated accordingly.
             NotifyItemIndicesChangedIfNeeded(
                 itemState = itemState,
-                orderedItems = orderedItems,
-                notifyItemIndicesChanged = onIndicesChangedViaDragAndDrop,
+                orderedItemsState = orderedItemsState,
+                notifyItemIndicesChanged = { reorderedItems ->
+                    val droppedItem = reorderedItems.firstOrNull {
+                        key(it.value) == itemKey
+                    }
+                    onDraggedItemDropped(reorderedItems, droppedItem)
+                },
             )
 
             // If the item is being disposed of while the user is still dragging it, that's most
@@ -286,8 +301,13 @@ fun <TItem> DragDropSwipeLazyColumn(
                             forceDropDraggedItem(
                                 itemState = itemState,
                                 listState = state,
-                                orderedItems = orderedItems,
-                                onIndicesChangedViaDragAndDrop = onIndicesChangedViaDragAndDrop,
+                                orderedItemsState = orderedItemsState,
+                                onIndicesChangedViaDragAndDrop = { reorderedItems ->
+                                    val droppedItem = reorderedItems.firstOrNull {
+                                        key(it.value) == itemKey
+                                    }
+                                    onDraggedItemDropped(reorderedItems, droppedItem)
+                                },
                             )
                         }
                     }
@@ -295,29 +315,106 @@ fun <TItem> DragDropSwipeLazyColumn(
             }
         }
     }
+
+    // If a dragged item has just been dropped, we need to ensure it is fully visible in the list,
+    // as that helps the user follow/understand what just happened.
+    EnsureDroppedItemIsFullyVisible(
+        state = state,
+        orderedItemsState = orderedItemsState,
+        lastDroppedItemState = lastDroppedItemState,
+        key = key,
+    )
+}
+
+@Composable
+private fun <TItem> EnsureDroppedItemIsFullyVisible(
+    state: DragDropSwipeLazyColumnState,
+    orderedItemsState: MutableState<ImmutableList<OrderedItem<TItem>>>,
+    lastDroppedItemState: MutableState<OrderedItem<TItem>?>,
+    key: (TItem) -> Any,
+) {
+    LaunchedEffect(
+        state,
+        orderedItemsState,
+        lastDroppedItemState,
+        key,
+    ) {
+        snapshotFlow {
+            val droppedItemToProcess = lastDroppedItemState.value
+            val droppedItemToProcessKey = droppedItemToProcess?.let { key(it.value) }
+            if (droppedItemToProcess != null && // there is a dropped item to process
+                droppedItemToProcessKey != state.draggedItemKey && // item is not being dragged anymore
+                orderedItemsState.value.any { // item is in the list and at its new index
+                    key(it.value) == droppedItemToProcessKey && it.initialIndex == droppedItemToProcess.newIndex
+                }
+            ) {
+                droppedItemToProcess
+            } else {
+                null
+            }
+        }
+            .filterNotNull()
+            .collect { droppedItem ->
+                val droppedItemInfo = state.lazyListState.layoutInfo.visibleItemsInfo.firstOrNull {
+                    it.key == key(droppedItem.value)
+                }
+                if (droppedItemInfo != null) {
+                    // If the item that just got dropped is not fully visible, we scroll to reveal it
+                    val listStart = state.lazyListState.layoutInfo.viewportStartOffset.toFloat()
+                    val listEnd = state.lazyListState.layoutInfo.viewportEndOffset.toFloat()
+                    val itemStart = droppedItemInfo.offset.toFloat()
+                    val itemEnd = itemStart + droppedItemInfo.size.toFloat() - 1f
+                    val hiddenHeightAtTheStart = (listStart - itemStart).fastCoerceAtLeast(0f)
+                    val hiddenHeightAtTheEnd = (itemEnd - listEnd).fastCoerceAtLeast(0f)
+                    val itemSpacing = state.lazyListState.layoutInfo.mainAxisItemSpacing
+                    when {
+                        hiddenHeightAtTheStart > 0f && hiddenHeightAtTheEnd == 0f -> {
+                            // Item is hidden at the start of the list, scroll to reveal it
+                            state.lazyListState.animateScrollBy(-hiddenHeightAtTheStart - itemSpacing)
+                        }
+
+                        hiddenHeightAtTheStart == 0f && hiddenHeightAtTheEnd > 0f -> {
+                            // Item is hidden at the end of the list, scroll to reveal it
+                            state.lazyListState.animateScrollBy(hiddenHeightAtTheEnd + itemSpacing)
+                        }
+                    }
+                }
+
+                // Reset the last dropped item state to avoid processing it again
+                lastDroppedItemState.value = null
+            }
+    }
+
+    // After a short delay, reset the last dropped item state to allow future drops to be processed.
+    // This is just in case the logic above didn't do it for some reason.
+    LaunchedEffect(lastDroppedItemState.value) {
+        if (lastDroppedItemState.value != null) {
+            delay(1000)
+            lastDroppedItemState.value = null
+        }
+    }
 }
 
 @Composable
 private fun ApplyOffsetIfNeeded(
     itemState: DraggableSwipeableItemState,
-    animatedDragDropOffsetInPx: Animatable<Float, AnimationVector1D>,
 ) {
-    LaunchedEffect(itemState, animatedDragDropOffsetInPx) {
+    LaunchedEffect(itemState) {
         snapshotFlow {
             itemState.isBeingDragged to itemState.offsetTargetInPx
         }
             .filter { (_, offsetTargetInPx) ->
-                animatedDragDropOffsetInPx.targetValue != offsetTargetInPx
+                itemState.animatedOffsetInPx.targetValue != offsetTargetInPx
             }
             .collect { (isBeingDragged, offsetTargetInPx) ->
                 if (isBeingDragged) {
                     // The user is dragging the item, so let's move it immediately to follow
-                    animatedDragDropOffsetInPx.snapTo(
+                    itemState.animatedOffsetInPx.snapTo(
                         targetValue = offsetTargetInPx,
                     )
                 } else {
                     // The user has dropped the item, so let's animate it to its target position
-                    animatedDragDropOffsetInPx.animateTo(
+                    itemState.animatedOffsetInPx.animateTo(
                         targetValue = offsetTargetInPx,
                         animationSpec = SpringSpec(
                             dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -330,31 +427,117 @@ private fun ApplyOffsetIfNeeded(
 }
 
 @Composable
-private fun <TItem> ReorderItemsIfNeeded(
+private fun ScrollToRevealDraggedItemIfNeeded(
     itemState: DraggableSwipeableItemState,
     lazyListState: LazyListState,
+    currentItemIndexState: MutableIntState,
     layoutReversed: Boolean,
-    orderedItems: ImmutableList<OrderedItem<TItem>>,
-    draggedItem: OrderedItem<TItem>,
-    draggedItemIndex: Int,
-    visibleListHeightInPx: Float,
-    key: (TItem) -> Any,
-    onItemsReordered: (ImmutableList<OrderedItem<TItem>>) -> Unit,
 ) {
-    if (visibleListHeightInPx == 0f) {
-        // The list's height hasn't been measured yet
-        itemState.update { copy(currentDragIndex = null) }
-        return
-    }
+    val minScrollDelta = 0.5.dp
+    val maxScrollDelta = 8.dp
+    val minScrollDeltaInPx = with(LocalDensity.current) { minScrollDelta.toPx() }
+    val maxScrollDeltaInPx = with(LocalDensity.current) { maxScrollDelta.toPx() }
+    val scrollDeltaMaxMinDiff = maxScrollDeltaInPx - minScrollDeltaInPx
 
     LaunchedEffect(
         itemState,
         lazyListState,
+        currentItemIndexState,
         layoutReversed,
-        orderedItems,
-        draggedItem,
-        draggedItemIndex,
-        visibleListHeightInPx,
+    ) {
+        snapshotFlow {
+            Triple(
+                itemState.offsetTargetInPx * (if (!layoutReversed) 1f else -1f),
+                itemState.currentDragIndex,
+                currentItemIndexState.intValue,
+            )
+        }
+            .filter { (_, currentDragIndex, currentItemIndex) ->
+                itemState.isBeingDragged && // item must be being dragged
+                    currentDragIndex == currentItemIndex // item must be positioned correctly
+            }
+            .map { (offsetTargetInPx, _, _) ->
+                val draggedItemInfo = lazyListState.layoutInfo.visibleItemsInfo.find { itemInfo ->
+                    itemInfo.key == itemState.itemKey
+                }
+
+                // Calculate how many pixels of the dragged item are hidden
+                if (draggedItemInfo != null) {
+                    val draggedItemOffset = draggedItemInfo.offset + offsetTargetInPx
+                    val draggedItemEnd = draggedItemOffset + draggedItemInfo.size
+                    val listEnd = lazyListState.layoutInfo.viewportEndOffset
+                    val draggedItemEndHiddenSize = (draggedItemEnd - listEnd).fastCoerceAtMost(
+                        maximumValue = draggedItemInfo.size.toFloat(),
+                    )
+                    if (draggedItemEndHiddenSize > 0f) {
+                        // The dragged item is being hidden at the end of the list,
+                        // so we'll need to reveal it by scrolling to catch up to it.
+                        val totalHiddenRatio = draggedItemEndHiddenSize / draggedItemInfo.size.toFloat()
+                        return@map totalHiddenRatio to true
+                    } else {
+                        // The dragged item is not being hidden at the end of the list,
+                        // let's check if it's being hidden at the start of it.
+                        val draggedItemStart = draggedItemOffset
+                        val listStart = lazyListState.layoutInfo.viewportStartOffset
+                        val draggedItemHiddenSize = (listStart - draggedItemStart).fastCoerceAtMost(
+                            maximumValue = draggedItemInfo.size.toFloat(),
+                        )
+                        if (draggedItemHiddenSize > 0f) {
+                            // The dragged item is being hidden at the start of the list,
+                            // so we'll need to reveal it by scrolling to catch up to it.
+                            val totalHiddenRatio = draggedItemHiddenSize / draggedItemInfo.size.toFloat()
+                            return@map totalHiddenRatio to false
+                        }
+                    }
+                }
+
+                // No part of the dragged item is being hidden
+                return@map null
+            }
+            .filterNotNull()
+            .map { (totalHiddenRatio, isHiddenPartAtTheEnd) ->
+                // The item is being dragged beyond the list edge, so we scroll the list to make
+                // it catch up to the dragged item, allowing the user to drag this item over
+                // other ones that might not currently be visible.
+                val centerHiddenRatio = (2f * totalHiddenRatio).fastCoerceAtMost(1f)
+                val scrollDelta = minScrollDeltaInPx + (scrollDeltaMaxMinDiff * centerHiddenRatio)
+                scrollDelta * (if (isHiddenPartAtTheEnd) 1f else -1f)
+            }
+            .filter { scrollDeltaToConsume ->
+                scrollDeltaToConsume != 0f
+            }
+            .collect { scrollDeltaToConsume ->
+                val consumedScrollDelta = lazyListState.scrollBy(scrollDeltaToConsume)
+                if (consumedScrollDelta != 0f) {
+                    itemState.update {
+                        copy(
+                            offsetTargetInPx = offsetTargetInPx + (consumedScrollDelta * if (!layoutReversed) 1f else -1f),
+                        )
+                    }
+                }
+
+                // Delay the next scroll event to avoid scrolling too fast
+                delay(8L)
+            }
+    }
+}
+
+@Composable
+private fun <TItem> ReorderItemsIfNeeded(
+    itemState: DraggableSwipeableItemState,
+    lazyListState: LazyListState,
+    orderedItemsState: MutableState<ImmutableList<OrderedItem<TItem>>>,
+    currentItemIndexState: MutableIntState,
+    layoutReversed: Boolean,
+    key: (TItem) -> Any,
+    onItemsReordered: (ImmutableList<OrderedItem<TItem>>) -> Unit,
+) {
+    LaunchedEffect(
+        itemState,
+        lazyListState,
+        orderedItemsState,
+        currentItemIndexState,
+        layoutReversed,
         key,
         onItemsReordered,
     ) {
@@ -366,13 +549,14 @@ private fun <TItem> ReorderItemsIfNeeded(
             )
         }
             .filter { (offsetTargetInPx, currentDragIndex, _) ->
-                offsetTargetInPx != 0f && (currentDragIndex == null || currentDragIndex == draggedItemIndex)
+                offsetTargetInPx != 0f && // item is not on its original position
+                    (currentDragIndex == null || currentDragIndex == currentItemIndexState.intValue) // item no longer dragged, or dragged at its current position
             }
             .map { (offsetTargetInPx, _, layoutInfo) ->
                 offsetTargetInPx to layoutInfo
             }
             .distinctUntilChanged()
-            .map { (offsetTargetInPx, layoutInfo) ->
+            .collect { (offsetTargetInPx, layoutInfo) ->
                 val draggedItemInfo = layoutInfo.visibleItemsInfo.find {
                     it.key == itemState.itemKey
                 }
@@ -381,7 +565,7 @@ private fun <TItem> ReorderItemsIfNeeded(
                     itemState.update {
                         copy(currentDragIndex = currentDragIndex?.takeUnless { !itemState.isBeingDragged })
                     }
-                    return@map null
+                    return@collect
                 }
 
                 // Find the item the currently dragged item is the closest to, using the item's
@@ -443,8 +627,8 @@ private fun <TItem> ReorderItemsIfNeeded(
                     // will happen as the user keeps making the list scroll further by dragging the
                     // item towards its edge, which will eventually reveal enough of the tall item
                     // for the swap to be possible without the dragged item getting out of bounds.
-                    val listBottom = layoutInfo.viewportEndOffset.toFloat()
-                    val listTop = listBottom - visibleListHeightInPx
+                    val listStart = layoutInfo.viewportStartOffset.toFloat()
+                    val listEnd = layoutInfo.viewportEndOffset.toFloat()
                     val draggedItemOffsetAfterSwap =
                         if (draggedItemInfo.index < closestItemInfo.index) {
                             closestItemInfo.offset + (closestItemInfo.size - draggedItemInfo.size)
@@ -453,15 +637,15 @@ private fun <TItem> ReorderItemsIfNeeded(
                         }
                     val draggedItemStartAfterSwap = draggedItemOffsetAfterSwap.toFloat()
                     val draggedItemEndAfterSwap = draggedItemStartAfterSwap + draggedItemInfo.size
-                    val isDraggedItemVisibleAfterSwap = draggedItemEndAfterSwap > listTop &&
-                            draggedItemStartAfterSwap < listBottom
+                    val isDraggedItemVisibleAfterSwap = draggedItemEndAfterSwap > listStart &&
+                        draggedItemStartAfterSwap < listEnd
                     if (!isDraggedItemVisibleAfterSwap) {
                         // We've just discovered that swapping the dragged item to its new position
                         // would cause it to leave the composition, so we skip the swap for now.
                         itemState.update {
                             copy(currentDragIndex = currentDragIndex?.takeUnless { !itemState.isBeingDragged })
                         }
-                        return@map null
+                        return@collect
                     }
 
                     // Additionally, before swapping positions, we also ensure that the swap won't
@@ -484,8 +668,8 @@ private fun <TItem> ReorderItemsIfNeeded(
                         (closestItemInfo.size - draggedItemInfo.size)
                             .takeIf { closestItemJump < 0f } ?: 0
                     val draggedItemCenterAfterSwap = closestItemInfo.offset +
-                            closestItemIndexOffsetChangeAfterSwap +
-                            (draggedItemInfo.size / 2f)
+                        closestItemIndexOffsetChangeAfterSwap +
+                        (draggedItemInfo.size / 2f)
                     if (abs(draggedItemInfo.index - closestItemInfo.index) == 1 &&
                         abs(closestItemCenterAfterSwap - currentDraggedItemCenter) <
                         abs(draggedItemCenterAfterSwap - currentDraggedItemCenter)
@@ -495,12 +679,13 @@ private fun <TItem> ReorderItemsIfNeeded(
                         itemState.update {
                             copy(currentDragIndex = currentDragIndex?.takeUnless { !itemState.isBeingDragged })
                         }
-                        return@map null
+                        return@collect
                     }
 
                     // Otherwise, if the special cases explained above aren't detected, we go ahead
                     // and perform the swap normally, shifting the necessary items appropriately.
-                    val newOrderedItems = orderedItems.toMutableList()
+                    val newOrderedItems = orderedItemsState.value.toMutableList()
+                    val itemsWithSwappedPositions = mutableListOf<OrderedItem<TItem>>()
 
                     // This correction will be necessary to ensure that, when the dragged item is
                     // moved to its new position, the drag offset currently applied to it is
@@ -530,17 +715,103 @@ private fun <TItem> ReorderItemsIfNeeded(
                         newOrderedItems[i] = itemToShift.copy(
                             newIndex = itemToShiftInfo.index + shift,
                         )
+                        itemsWithSwappedPositions.add(newOrderedItems[i])
                     }
 
-                    // Update the dragged item's index and offset correction
-                    newOrderedItems[draggedItem.newIndex] = draggedItem.copy(
-                        newIndex = closestItemInfo.index,
-                    )
+                    // Update the dragged item's index
+                    newOrderedItems[draggedItemInfo.index] =
+                        orderedItemsState.value[draggedItemInfo.index].copy(
+                            newIndex = closestItemInfo.index,
+                        )
+                    itemsWithSwappedPositions.add(newOrderedItems[draggedItemInfo.index])
 
-                    // Finally, reorder the list applying the new indices and return the result
+                    // Finally, reorder the list applying the new indices
                     val reorderedItems = newOrderedItems.sortedBy { it.newIndex }.toImmutableList()
                     val offsetCorrection = absOffsetCorrection * offsetCorrectionSign
-                    reorderedItems to offsetCorrection
+                    itemState.update {
+                        copy(
+                            // Apply an offset correction to the dragged item so that it appears where
+                            // it should after being reordered into a new position, as the current
+                            // offset will stop making sense after the reordering.
+                            offsetTargetInPx = this.offsetTargetInPx + offsetCorrection,
+
+                            // Update the current drag index to the new one now that the dragged item
+                            // has been moved to its new position.
+                            currentDragIndex = closestItemInfo.index.takeUnless { !itemState.isBeingDragged },
+
+                            // Indicate that the item has been reordered via dragging at least once,
+                            // which means that might need to invoke the reorder callback later.
+                            pendingReorderCallbackInvocation = true,
+                        )
+                    }
+
+                    // ... And one more thing! If the swapping of items causes the first visible
+                    // item (which isn't actually the first visible item for the user, as there is
+                    // a lot of nuance here, but I digress) to change, we need to apply a small
+                    // correction to ensure the list won't scroll automatically in the next pass to
+                    // re-anchor itself, as that would throw off all our calculations and cause the
+                    // items to "jump". This is kinda hard to explain, as it makes no sense...
+                    // Context here: https://issuetracker.google.com/issues/209652366#comment23.
+
+                    // For this, first we find the info of the visible items that were reordered
+                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                    val reorderedItemsInfo = itemsWithSwappedPositions
+                        .sortedBy { it.newIndex }
+                        .mapNotNull { reorderedItem ->
+                            val reorderedItemKey = key(reorderedItem.value)
+                            val reorderedItemInfo = visibleItemsInfo.firstOrNull {
+                                it.key == reorderedItemKey
+                            }
+                            // New index to old item info
+                            reorderedItemInfo?.let { reorderedItem.newIndex to reorderedItemInfo }
+                        }
+
+                    // Then, we calculate where each item will be positioned after the swapping
+                    val reorderedItemIndexToOffset = if (reorderedItemsInfo.isNotEmpty()) {
+                        // New index to new offset
+                        val reorderedItemIndexToOffset = mutableListOf(
+                            reorderedItemsInfo.first().first to reorderedItemsInfo.minOf { it.second.offset },
+                        )
+                        for (reorderedItemInfoIndex in 1 until reorderedItemsInfo.size) {
+                            val previousReorderedItemOffset =
+                                reorderedItemIndexToOffset[reorderedItemInfoIndex - 1].second
+                            val previousReorderedItemSize =
+                                reorderedItemsInfo[reorderedItemInfoIndex - 1].second.size
+                            val newReorderedItemIndex =
+                                reorderedItemsInfo[reorderedItemInfoIndex].first
+                            val newReorderedItemOffset =
+                                previousReorderedItemOffset + previousReorderedItemSize + layoutInfo.mainAxisItemSpacing
+                            reorderedItemIndexToOffset.add(newReorderedItemIndex to newReorderedItemOffset)
+                        }
+                        reorderedItemIndexToOffset
+                    } else {
+                        emptyList()
+                    }
+
+                    // Finally, to avoid the "jumping" mentioned above, we find the item that should
+                    // remain anchored in its position and request a scroll to it on the next layout
+                    // pass. This isn't perfect because the layout might not sync well with this
+                    // request, as we are making it from a coroutine, but it works surprisingly well
+                    // in practice, so it's good enough. Also, invoking this method sometimes causes
+                    // the list animations to stop working temporarily, but that's just pretty much
+                    // impossible to avoid.
+                    val itemToKeepInAnchoredPosition = reorderedItemIndexToOffset
+                        .filter { (_, newOffset) ->
+                            newOffset <= 0
+                        }
+                        .maxByOrNull { (newIndex, _) ->
+                            newIndex
+                        }
+                    if (itemToKeepInAnchoredPosition != null) {
+                        val (itemIndex, itemOffset) = itemToKeepInAnchoredPosition
+                        lazyListState.requestScrollToItem(
+                            index = itemIndex,
+                            scrollOffset = -itemOffset,
+                        )
+                    }
+
+                    // Finally (for real now), notify about the reordering to update the list
+                    onItemsReordered(reorderedItems)
                 } else {
                     // The dragged item is still closer to its original position than to any other
                     // item in the list, so we don't need to swap it with any other item yet. Still,
@@ -548,182 +819,6 @@ private fun <TItem> ReorderItemsIfNeeded(
                     itemState.update {
                         copy(currentDragIndex = closestItemInfo.index.takeUnless { !itemState.isBeingDragged })
                     }
-                    null
-                }
-            }
-            .filterNotNull()
-            .distinctUntilChanged()
-            .collect { (reorderedItems, offsetCorrection) ->
-                // Find the actual first visible item (sometimes, the list of visible items contains
-                // items that are already fully out of view). Then, if the dragged item has become
-                // (or has stopped being) the first visible one, apply a small correction to ensure
-                // the list won't scroll automatically in the next pass, as that would throw off all
-                // our operations and calculations. This is kinda hard to explain because it makes
-                // no sense, so just see https://issuetracker.google.com/issues/209652366#comment23.
-                val listBottom = lazyListState.layoutInfo.viewportEndOffset
-                val listTop = listBottom - visibleListHeightInPx.roundToInt()
-                val firstVisibleItemInfo = lazyListState.layoutInfo.visibleItemsInfo
-                    .filter { itemInfo ->
-                        val itemTop = itemInfo.offset
-                        val itemTopHiddenSize = (listTop - itemTop).coerceAtMost(itemInfo.size)
-                        itemTopHiddenSize < itemInfo.size
-                    }
-                    .minByOrNull { it.index }
-                val reorderedDraggedItem = reorderedItems.first {
-                    key(it.value) == key(draggedItem.value)
-                }
-                if (firstVisibleItemInfo != null &&
-                    (firstVisibleItemInfo.index == reorderedDraggedItem.newIndex || firstVisibleItemInfo.index == draggedItem.newIndex)
-                ) {
-                    lazyListState.requestScrollToItem(
-                        index = firstVisibleItemInfo.index,
-                        scrollOffset = -firstVisibleItemInfo.offset,
-                    )
-                }
-
-                itemState.update {
-                    copy(
-                        // Apply an offset correction to the dragged item so that it appears where
-                        // it should after being reordered into a new position, as the current
-                        // offset will stop making sense after the reordering.
-                        offsetTargetInPx = offsetTargetInPx + offsetCorrection,
-
-                        // Update the current drag index to the new one now that the dragged item
-                        // has been moved to its new position.
-                        currentDragIndex = reorderedDraggedItem.newIndex.takeUnless { !itemState.isBeingDragged },
-
-                        // Indicate that the item has been reordered via dragging at least once,
-                        // which means that might need to invoke the reorder callback later.
-                        pendingReorderCallbackInvocation = true,
-                    )
-                }
-                onItemsReordered(reorderedItems)
-            }
-    }
-}
-
-@Composable
-private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
-    itemState: DraggableSwipeableItemState,
-    lazyListState: LazyListState,
-    layoutReversed: Boolean,
-    draggedItem: OrderedItem<TItem>,
-    draggedItemIndex: Int,
-    visibleListHeightInPx: Float,
-) {
-    var isDropHandlingPending by remember { mutableStateOf(false) }
-
-    if (visibleListHeightInPx == 0f || (!itemState.isBeingDragged && !isDropHandlingPending)) {
-        // The list's height hasn't been measured yet or the item isn't being dragged or dropped
-        return
-    }
-
-    val minScroll = 1.dp
-    val maxScroll = 2.dp
-    val minScrollInPx = with(LocalDensity.current) { minScroll.toPx() }
-    val maxScrollInPx = with(LocalDensity.current) { maxScroll.toPx() }
-
-    LaunchedEffect(
-        itemState,
-        lazyListState,
-        layoutReversed,
-        draggedItem,
-        draggedItemIndex,
-        visibleListHeightInPx,
-    ) {
-        snapshotFlow {
-            Triple(
-                itemState.offsetTargetInPx * (if (!layoutReversed) 1f else -1f),
-                itemState.currentDragIndex,
-                lazyListState.layoutInfo,
-            )
-        }
-            .filter { (_, currentDragIndex, _) ->
-                currentDragIndex == null || currentDragIndex == draggedItemIndex
-            }
-            .map { (offsetTargetInPx, currentDragIndex, layoutInfo) ->
-                val draggedItemInfo = layoutInfo.visibleItemsInfo.find { itemInfo ->
-                    itemInfo.key == itemState.itemKey
-                }
-
-                // Calculate how many pixels of the dragged item are hidden
-                if (draggedItemInfo != null && currentDragIndex != null) {
-                    val draggedItemOffset = draggedItemInfo.offset + offsetTargetInPx
-                    val draggedItemEnd = draggedItemOffset + draggedItemInfo.size
-                    val listEnd = layoutInfo.viewportEndOffset
-                    val draggedItemEndHiddenSize = (draggedItemEnd - listEnd).coerceAtMost(
-                        maximumValue = draggedItemInfo.size.toFloat(),
-                    )
-                    if (draggedItemEndHiddenSize > 0f && currentDragIndex >= draggedItemInfo.index) {
-                        // The dragged item is being hidden at the end of the list,
-                        // so we'll need to reveal it by scrolling to catch up to it.
-                        return@map Triple(
-                            draggedItemInfo.size.toFloat(),
-                            draggedItemEndHiddenSize,
-                            true,
-                        )
-                    } else {
-                        // The dragged item is not being hidden at the end of the list,
-                        // let's check if it's being hidden at the start of it.
-                        val draggedItemStart = draggedItemOffset
-                        val listStart = listEnd - visibleListHeightInPx
-                        val draggedItemHiddenSize = (listStart - draggedItemStart).coerceAtMost(
-                            maximumValue = draggedItemInfo.size.toFloat(),
-                        )
-                        if (draggedItemHiddenSize > 0f && currentDragIndex <= draggedItemInfo.index) {
-                            // The dragged item is being hidden at the start of the list,
-                            // so we'll need to reveal it by scrolling to catch up to it.
-                            return@map Triple(
-                                draggedItemInfo.size.toFloat(),
-                                draggedItemHiddenSize,
-                                false,
-                            )
-                        }
-                    }
-                }
-
-                return@map null
-            }
-            .filterNotNull()
-            .collect { (itemSize, hiddenItemSize, isHiddenPartAtTheEnd) ->
-                if (itemState.isBeingDragged) {
-                    // The item is currently being dragged, so we indicate that a drop is pending
-                    isDropHandlingPending = true
-
-                    // The item is being dragged beyond the list edge, so we scroll the list to make
-                    // it catch up to the dragged item, allowing the user to drag this item over
-                    // other ones that might not currently be visible.
-                    val totalHiddenRatio = hiddenItemSize / itemSize
-                    val centerHiddenRatio = (2f * totalHiddenRatio).coerceAtMost(1f)
-                    val scroll = minScrollInPx + (maxScrollInPx - minScrollInPx) * centerHiddenRatio
-                    val scrollToConsume = scroll * (if (isHiddenPartAtTheEnd) 1f else -1f)
-                    val consumedScroll = lazyListState.scrollBy(scrollToConsume)
-                    val correctedConsumedScroll = consumedScroll * if (!layoutReversed) 1f else -1f
-                    itemState.update {
-                        copy(offsetTargetInPx = offsetTargetInPx + correctedConsumedScroll)
-                    }
-
-                    // Delay the next scroll event to avoid scrolling too fast (the more the dragged
-                    // item is hidden, the less we delay in order to move faster, that way the user
-                    // can force the scroll to be quicker by dragging further over the list edge).
-                    val delayMillis = (1.5f / (centerHiddenRatio * abs(consumedScroll)))
-                    val delayMillisCorrected = delayMillis.coerceAtLeast(0.05f)
-                    val delayNanoseconds = (delayMillisCorrected * 1000000).toInt()
-                    if (itemState.isBeingDragged) {
-                        delay(delayNanoseconds.nanoseconds)
-                    }
-                } else if (isDropHandlingPending) {
-                    // The item is no longer being dragged, so we make sure we make it fully visible
-                    // now that the user has dropped it.
-                    val scroll = if (isHiddenPartAtTheEnd) {
-                        hiddenItemSize + lazyListState.layoutInfo.mainAxisItemSpacing
-                    } else {
-                        -(hiddenItemSize + lazyListState.layoutInfo.mainAxisItemSpacing)
-                    }
-                    lazyListState.animateScrollBy(scroll)
-
-                    // Then, we indicate that the drop is handled and thus no longer pending
-                    isDropHandlingPending = false
                 }
             }
     }
@@ -732,22 +827,27 @@ private fun <TItem> ScrollToRevealDraggedItemIfNeeded(
 @Composable
 private fun <TItem> NotifyItemIndicesChangedIfNeeded(
     itemState: DraggableSwipeableItemState,
-    orderedItems: ImmutableList<OrderedItem<TItem>>,
+    orderedItemsState: MutableState<ImmutableList<OrderedItem<TItem>>>,
     notifyItemIndicesChanged: (ImmutableList<OrderedItem<TItem>>) -> Unit,
 ) {
-    if (!itemState.pendingReorderCallbackInvocation) {
-        // No items have been reordered yet, so we don't need to notify anything
-        return
-    }
-
-    LaunchedEffect(itemState, orderedItems, notifyItemIndicesChanged) {
+    LaunchedEffect(itemState, orderedItemsState, notifyItemIndicesChanged) {
         snapshotFlow {
-            itemState.isBeingDragged
+            Triple(
+                itemState.isBeingDragged,
+                itemState.pendingReorderCallbackInvocation,
+                orderedItemsState.value,
+            )
         }
-            .filterNot { isBeingDragged -> isBeingDragged }
-            .map { orderedItems.filter { it.initialIndex != it.newIndex }.toImmutableList() }
+            .filter { (isBeingDragged, pendingReorderCallbackInvocation, _) ->
+                !isBeingDragged && pendingReorderCallbackInvocation
+            }
+            .map { (_, _, orderedItems) ->
+                orderedItems.filter { it.initialIndex != it.newIndex }.toImmutableList()
+            }
             .distinctUntilChanged()
-            .filter { itemsWithUpdatedIndex -> itemsWithUpdatedIndex.isNotEmpty() }
+            .filter { itemsWithUpdatedIndex ->
+                itemsWithUpdatedIndex.isNotEmpty()
+            }
             .collect { itemsWithUpdatedIndex ->
                 itemState.update { copy(pendingReorderCallbackInvocation = false) }
                 notifyItemIndicesChanged(itemsWithUpdatedIndex)
@@ -758,13 +858,13 @@ private fun <TItem> NotifyItemIndicesChangedIfNeeded(
 private fun <TItem> forceDropDraggedItem(
     itemState: DraggableSwipeableItemState,
     listState: DragDropSwipeLazyColumnState,
-    orderedItems: ImmutableList<OrderedItem<TItem>>,
+    orderedItemsState: MutableState<ImmutableList<OrderedItem<TItem>>>,
     onIndicesChangedViaDragAndDrop: (List<OrderedItem<TItem>>) -> Unit,
 ) {
     if (itemState.isBeingDragged) {
         // Notify about the latest reordering, in case there was any
         if (itemState.pendingReorderCallbackInvocation) {
-            val itemsWithUpdatedIndex = orderedItems.filter {
+            val itemsWithUpdatedIndex = orderedItemsState.value.filter {
                 it.initialIndex != it.newIndex
             }
             if (itemsWithUpdatedIndex.isNotEmpty()) {
@@ -781,6 +881,7 @@ private fun <TItem> forceDropDraggedItem(
                 pendingReorderCallbackInvocation = false,
             )
         }
+        itemState.onDragFinishCallback()
     }
 
     // Ensure we release the item from being considered the dragged one

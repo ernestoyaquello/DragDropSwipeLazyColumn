@@ -25,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -55,6 +56,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
@@ -92,6 +94,13 @@ fun <TItem> LazyColumnEnhancingWrapper(
         getItemModifier: @Composable (index: Int, item: TItem) -> Modifier,
     ) -> Unit,
 ) {
+    val itemsState = remember {
+        mutableStateOf(items)
+    }
+    LaunchedEffect(items) {
+        itemsState.value = items
+    }
+
     var revealedItemKeys by remember {
         mutableStateOf(items.map { key(it) }.toImmutableSet())
     }
@@ -163,14 +172,23 @@ fun <TItem> LazyColumnEnhancingWrapper(
                         }
                     }
 
-                    // If the item happens to be the last one, then we make sure to scroll to it
-                    // as it is being revealed so that it becomes fully visible.
+                    // If the item being revealed happens to be the last one, we need to ensure we
+                    // scroll to it as the reveal animation is running (as this animation will make
+                    // the item's height grow, the scrolling is needed to keep it visible, otherwise
+                    // the item might grow into the area hidden below the list viewport).
                     val isLastItem = index == items.lastIndex
                     if (isLastItem) {
                         LaunchedEffect(itemRevealVerticalScale, state) {
-                            snapshotFlow { itemRevealVerticalScale.value }
+                            snapshotFlow {
+                                itemRevealVerticalScale.value
+                            }
                                 .distinctUntilChanged()
-                                .collectLatest { state.scrollToItem(index) }
+                                .filterNot {
+                                    state.isScrollInProgress
+                                }
+                                .collectLatest {
+                                    state.scrollToItem(index)
+                                }
                         }
                     }
                 }
@@ -202,38 +220,61 @@ fun <TItem> LazyColumnEnhancingWrapper(
         }
     }
 
-    // Ensure that, when a new item is added to the bottom of the list, we scroll to it in case
-    // it is not visible already.
-    var rememberedItemKeys by remember(key) {
-        mutableStateOf(items.map { key(it) }.toImmutableList())
+    // Ensure that, when a new item is added to the bottom of the list, causing it to be entirely
+    // hidden from view, we scroll to it.
+    EnsureNewItemAddedAtTheEndIsScrolledTo(
+        state = state,
+        itemsState = itemsState,
+        key = key,
+    )
+
+    content(listModifier, getItemModifier)
+}
+
+@Composable
+private fun <TItem> EnsureNewItemAddedAtTheEndIsScrolledTo(
+    state: LazyListState,
+    itemsState: MutableState<ImmutableList<TItem>>,
+    key: (TItem) -> Any,
+) {
+    val getItemKeys: (ImmutableList<TItem>) -> ImmutableList<Any> = remember(key) {
+        { items -> items.map { key(it) }.toImmutableList() }
     }
-    LaunchedEffect(state, items, key, rememberedItemKeys) {
+    val itemKeysState = remember(getItemKeys) {
+        mutableStateOf(getItemKeys(itemsState.value))
+    }
+
+    LaunchedEffect(state, itemsState, getItemKeys, itemKeysState) {
         snapshotFlow {
-            val itemKeys = items.map { key(it) }.toImmutableList()
-            itemKeys to state.layoutInfo
+            itemsState.value to state.layoutInfo.totalItemsCount
         }
-            .filter { (itemKeys, layoutInfo) ->
-                itemKeys.size == layoutInfo.totalItemsCount && itemKeys != rememberedItemKeys
+            .filter { (items, totalItemsCount) ->
+                // Wait until all items are available in the layout
+                items.size == totalItemsCount
             }
-            .map { (itemKeys, _) ->
-                itemKeys
+            .map { (items, _) ->
+                getItemKeys(items)
             }
-            .distinctUntilChanged()
-            .collectLatest { itemKeys ->
-                try {
-                    if ((itemKeys.size - rememberedItemKeys.size) == 1
-                        && !rememberedItemKeys.contains(itemKeys.last())
-                        && state.layoutInfo.visibleItemsInfo.none { it.key == itemKeys.last() }
-                    ) {
-                        state.animateScrollToItem(items.lastIndex)
+            .filter { itemKeys ->
+                // Ensure that only one new item was added, and that it was added at the end of the list
+                val wasNewItemAddedAtTheEnd = (itemKeys.size - itemKeysState.value.size) == 1 &&
+                    itemKeys.dropLast(1).toImmutableList() == itemKeysState.value
+
+                wasNewItemAddedAtTheEnd.also {
+                    if (!wasNewItemAddedAtTheEnd) {
+                        // The collection won't execute, but we still need to update the remembered keys
+                        itemKeysState.value = itemKeys
                     }
+                }
+            }
+            .collect { itemKeys ->
+                try {
+                    state.animateScrollToItem(state.layoutInfo.totalItemsCount - 1)
                 } finally {
-                    rememberedItemKeys = itemKeys
+                    itemKeysState.value = itemKeys
                 }
             }
     }
-
-    content(listModifier, getItemModifier)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

@@ -63,7 +63,7 @@ class DraggableSwipeableItemScope<TItem> internal constructor(
         placementSpecDefault: FiniteAnimationSpec<IntOffset>? = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow,
-            visibilityThreshold = IntOffset.Companion.VisibilityThreshold,
+            visibilityThreshold = IntOffset.VisibilityThreshold,
         ),
         // If an item is being dragged, placement animations will happen as a result of the dragged
         // item swapping positions with other items. In this case, we'll want the reordering
@@ -71,7 +71,7 @@ class DraggableSwipeableItemScope<TItem> internal constructor(
         placementSpecWhenAnyItemIsBeingDragged: FiniteAnimationSpec<IntOffset>? = spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMedium,
-            visibilityThreshold = IntOffset.Companion.VisibilityThreshold,
+            visibilityThreshold = IntOffset.VisibilityThreshold,
         ),
         fadeOutSpec: FiniteAnimationSpec<Float>? = spring(
             stiffness = Spring.StiffnessMediumLow,
@@ -88,13 +88,13 @@ class DraggableSwipeableItemScope<TItem> internal constructor(
                 placementSpecDefault
             }
             @Suppress("DEPRECATION")
-            Modifier.Companion.animateItem(
+            Modifier.animateItem(
                 fadeInSpec = fadeInSpec,
                 placementSpec = placementSpec,
                 fadeOutSpec = fadeOutSpec,
             )
         } else {
-            Modifier.Companion
+            Modifier
         },
     )
 

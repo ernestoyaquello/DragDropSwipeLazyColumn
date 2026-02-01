@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -45,7 +46,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Composable that can be used to a create draggable, swipeable item.
+ * Composable that can be used to create a draggable, swipeable item.
  *
  * To make an element within the item (e.g., a drag icon) able to start the dragging,
  * you must assign it the modifier dragDropModifier().
@@ -114,6 +115,13 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
     onSwipeDismiss: (DismissSwipeDirection) -> Unit = remember { {} },
     content: @Composable BoxScope.() -> Unit,
 ) {
+    // Set the drag finish callback so that the list can access it when needed
+    itemState.update {
+        copy(
+            onDragFinishCallback = onDragFinish,
+        )
+    }
+
     // Set the allowed swiping directions and ensure that the swipe functionality gets temporarily
     // disabled while the user is dragging any item.
     itemState.swipeableItemState.update {
@@ -153,9 +161,18 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
         },
     )
     val isUserSwipingOrDragging = listState.draggedItemKey != null ||
-            listState.swipedItemKeys.isNotEmpty()
+        listState.swipedItemKeys.isNotEmpty()
     val isUserDraggingAnotherItem = listState.draggedItemKey != null &&
-            listState.draggedItemKey != itemState.itemKey
+        listState.draggedItemKey != itemState.itemKey
+
+    val animatedOffsetInPx = remember(itemState) {
+        itemState.animatedOffsetInPx
+    }
+    val animatedOffsetInPxApplied by remember {
+        derivedStateOf {
+            animatedOffsetInPx.value != 0f || animatedOffsetInPx.isRunning
+        }
+    }
 
     SwipeableItem(
         modifier = modifier
@@ -179,14 +196,14 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
                         itemState.offsetTargetInPx.roundToInt()
                     } else {
                         // Otherwise, just apply the animated offset normally
-                        itemState.animatedOffsetInPx.value.roundToInt()
+                        animatedOffsetInPx.value.roundToInt()
                     },
                 )
             }
             .zIndex(
                 zIndex = when {
                     itemState.isBeingDragged -> 2f
-                    itemState.animatedOffsetInPx.value != 0f -> 1f
+                    animatedOffsetInPxApplied -> 1f
                     else -> 0f
                 },
             )
@@ -234,12 +251,12 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
         dragDropModifier = if (dragDropEnabled && !isUserDraggingAnotherItem) {
             // Keep the index that will be used to mark the initial position of the item when the
             // dragging starts, making sure not to change it while the item is being dragged, as
-            // that would cause the pointerInput to be reset, interrupting the dragging gesture.
+            // that would cause the pointerInput below to be reset, interrupting the dragging gesture.
             // Once the item is dropped though, we will update the index to the current one so that
             // the next dragging gesture works as expected.
             var nextIndexWhenDragStarts by remember { mutableIntStateOf(currentIndex) }
-            if (!itemState.isBeingDragged) {
-                LaunchedEffect(currentIndex) {
+            LaunchedEffect(itemState.isBeingDragged, currentIndex) {
+                if (!itemState.isBeingDragged) {
                     nextIndexWhenDragStarts = currentIndex
                 }
             }
@@ -337,7 +354,6 @@ private suspend fun AwaitPointerEventScope.handleDragDropGestures(
                 offsetTargetInPx = 0f,
             )
         }
+        onDragFinish()
     }
-
-    onDragFinish()
 }

@@ -1,9 +1,7 @@
 package com.ernestoyaquello.dragdropswipelazycolumn.state
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -55,33 +53,6 @@ class DragDropSwipeLazyColumnState internal constructor(
         update: State.() -> State,
     ) {
         internalState.value = internalState.value.update()
-    }
-}
-
-/**
- * Creates a [DragDropSwipeLazyColumnState] that is remembered across compositions.
- *
- * Changes to the provided initial values will **not** result in the state being recreated or
- * changed in any way if it has already been created.
- *
- * @param cacheWindow The size of the ahead-and-behind window.
- * @param initialFirstVisibleItemIndex The initial first visible item index.
- * @param initialFirstVisibleItemScrollOffset The initial first visible item scroll offset.
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun rememberDragDropSwipeLazyColumnState(
-    cacheWindow: LazyLayoutCacheWindow,
-    initialFirstVisibleItemIndex: Int = 0,
-    initialFirstVisibleItemScrollOffset: Int = 0,
-): DragDropSwipeLazyColumnState {
-    val lazyListState = rememberLazyListState(
-        cacheWindow = cacheWindow,
-        initialFirstVisibleItemIndex = initialFirstVisibleItemIndex,
-        initialFirstVisibleItemScrollOffset = initialFirstVisibleItemScrollOffset,
-    )
-    return remember(lazyListState) {
-        DragDropSwipeLazyColumnState(lazyListState)
     }
 }
 

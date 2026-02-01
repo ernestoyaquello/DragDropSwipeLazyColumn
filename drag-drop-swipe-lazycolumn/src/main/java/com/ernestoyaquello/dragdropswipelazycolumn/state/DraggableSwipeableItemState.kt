@@ -3,9 +3,11 @@ package com.ernestoyaquello.dragdropswipelazycolumn.state
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.annotation.RememberInComposition
 import androidx.compose.runtime.mutableStateOf
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections
 
+@Immutable
 class DraggableSwipeableItemState internal constructor(
     itemKey: Any,
     internal val swipeableItemState: SwipeableItemState,
@@ -18,9 +20,17 @@ class DraggableSwipeableItemState internal constructor(
         val currentDragIndex: Int? = null,
         val offsetTargetInPx: Float = 0f,
         val pendingReorderCallbackInvocation: Boolean = false,
+        val onDragFinishCallback: () -> Unit = {},
     )
 
-    private val internalState = mutableStateOf(State(itemKey))
+    private val internalState = mutableStateOf(
+        value = State(itemKey),
+    )
+
+    private val internalAnimatedOffsetInPx = Animatable(
+        initialValue = internalState.value.offsetTargetInPx,
+        typeConverter = Float.VectorConverter,
+    )
 
     /**
      * The key of the item.
@@ -83,10 +93,15 @@ class DraggableSwipeableItemState internal constructor(
     /**
      * Animatable to push the item to its target position, which is defined in [offsetTargetInPx].
      */
-    internal val animatedOffsetInPx = Animatable(
-        initialValue = internalState.value.offsetTargetInPx,
-        typeConverter = Float.Companion.VectorConverter,
-    )
+    internal val animatedOffsetInPx
+        @RememberInComposition
+        get() = internalAnimatedOffsetInPx
+
+    /**
+     * The callback to be invoked once the drag operation finishes.
+     */
+    internal val onDragFinishCallback
+        get() = internalState.value.onDragFinishCallback
 
     /**
      * Resets the state of the swipeable item, bringing it back to its initial position if needed.
