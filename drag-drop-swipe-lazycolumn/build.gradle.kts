@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.ernestoyaquello.dragdropswipelazycolumn"
-version = "0.10.1"
+version = "0.10.2"
 
 configure<LibraryExtension> {
     namespace = "com.ernestoyaquello.dragdropswipelazycolumn"
