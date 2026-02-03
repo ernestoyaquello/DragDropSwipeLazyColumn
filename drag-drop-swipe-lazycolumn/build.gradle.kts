@@ -46,7 +46,8 @@ dependencies {
 }
 
 mavenPublishing {
-    publishToMavenCentral()
+    publishToMavenCentral(automaticRelease = true)
+    signAllPublications()
 
     coordinates(
         groupId = group.toString(),

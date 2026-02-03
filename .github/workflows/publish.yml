@@ -31,7 +31,4 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.OSSRH_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_PRIVATE_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_PASSPHRASE }}
-          ORG_GRADLE_PROJECT_mavenCentralPublishing: "true"
-          ORG_GRADLE_PROJECT_mavenCentralAutomaticPublishing: "true"
-          ORG_GRADLE_PROJECT_signAllPublications: "true"
         run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache --info
