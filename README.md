@@ -26,7 +26,7 @@ If you have a `libs.versions.toml` catalog for your dependencies, add these two 
 
 ```toml
 [versions]
-dragDropSwipeLazyColumn = "0.10.1"
+dragDropSwipeLazyColumn = "0.10.2"
 
 [libraries]
 drag-drop-swipe-lazycolumn = { module = "com.ernestoyaquello.dragdropswipelazycolumn:drag-drop-swipe-lazycolumn", version.ref = "dragDropSwipeLazyColumn" }
@@ -47,7 +47,7 @@ Otherwise, if you are not using a catalogue to manage your dependencies, just ad
 
 ```kotlin
 dependencies {
-    implementation("com.ernestoyaquello.dragdropswipelazycolumn:drag-drop-swipe-lazycolumn:0.10.1")
+    implementation("com.ernestoyaquello.dragdropswipelazycolumn:drag-drop-swipe-lazycolumn:0.10.2")
 }
 ```
 
