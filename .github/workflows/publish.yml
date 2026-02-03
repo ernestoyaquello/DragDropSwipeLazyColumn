@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 19
           server-id: ossrh
           server-username: ${{ secrets.OSSRH_USERNAME }}
           server-password: ${{ secrets.OSSRH_PASSWORD }}
@@ -34,4 +34,4 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPublishing: "true"
           ORG_GRADLE_PROJECT_mavenCentralAutomaticPublishing: "true"
           ORG_GRADLE_PROJECT_signAllPublications: "true"
-        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
+        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache --info
