@@ -15,7 +15,7 @@ configure<LibraryExtension> {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 26
+        minSdk = 21
         consumerProguardFiles("consumer-rules.pro")
     }
 
