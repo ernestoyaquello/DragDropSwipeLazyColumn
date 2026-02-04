@@ -168,7 +168,7 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
     val animatedOffsetInPx = remember(itemState) {
         itemState.animatedOffsetInPx
     }
-    val animatedOffsetInPxApplied by remember {
+    val animatedOffsetInPxApplied by remember(animatedOffsetInPx) {
         derivedStateOf {
             animatedOffsetInPx.value != 0f || animatedOffsetInPx.isRunning
         }

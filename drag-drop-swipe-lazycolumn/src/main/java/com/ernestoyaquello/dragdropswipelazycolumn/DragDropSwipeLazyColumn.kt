@@ -327,75 +327,6 @@ fun <TItem> DragDropSwipeLazyColumn(
 }
 
 @Composable
-private fun <TItem> EnsureDroppedItemIsFullyVisible(
-    state: DragDropSwipeLazyColumnState,
-    orderedItemsState: MutableState<ImmutableList<OrderedItem<TItem>>>,
-    lastDroppedItemState: MutableState<OrderedItem<TItem>?>,
-    key: (TItem) -> Any,
-) {
-    LaunchedEffect(
-        state,
-        orderedItemsState,
-        lastDroppedItemState,
-        key,
-    ) {
-        snapshotFlow {
-            val droppedItemToProcess = lastDroppedItemState.value
-            val droppedItemToProcessKey = droppedItemToProcess?.let { key(it.value) }
-            if (droppedItemToProcess != null && // there is a dropped item to process
-                droppedItemToProcessKey != state.draggedItemKey && // item is not being dragged anymore
-                orderedItemsState.value.any { // item is in the list and at its new index
-                    key(it.value) == droppedItemToProcessKey && it.initialIndex == droppedItemToProcess.newIndex
-                }
-            ) {
-                droppedItemToProcess
-            } else {
-                null
-            }
-        }
-            .filterNotNull()
-            .collect { droppedItem ->
-                val droppedItemInfo = state.lazyListState.layoutInfo.visibleItemsInfo.firstOrNull {
-                    it.key == key(droppedItem.value)
-                }
-                if (droppedItemInfo != null) {
-                    // If the item that just got dropped is not fully visible, we scroll to reveal it
-                    val listStart = state.lazyListState.layoutInfo.viewportStartOffset.toFloat()
-                    val listEnd = state.lazyListState.layoutInfo.viewportEndOffset.toFloat()
-                    val itemStart = droppedItemInfo.offset.toFloat()
-                    val itemEnd = itemStart + droppedItemInfo.size.toFloat() - 1f
-                    val hiddenHeightAtTheStart = (listStart - itemStart).fastCoerceAtLeast(0f)
-                    val hiddenHeightAtTheEnd = (itemEnd - listEnd).fastCoerceAtLeast(0f)
-                    val itemSpacing = state.lazyListState.layoutInfo.mainAxisItemSpacing
-                    when {
-                        hiddenHeightAtTheStart > 0f && hiddenHeightAtTheEnd == 0f -> {
-                            // Item is hidden at the start of the list, scroll to reveal it
-                            state.lazyListState.animateScrollBy(-hiddenHeightAtTheStart - itemSpacing)
-                        }
-
-                        hiddenHeightAtTheStart == 0f && hiddenHeightAtTheEnd > 0f -> {
-                            // Item is hidden at the end of the list, scroll to reveal it
-                            state.lazyListState.animateScrollBy(hiddenHeightAtTheEnd + itemSpacing)
-                        }
-                    }
-                }
-
-                // Reset the last dropped item state to avoid processing it again
-                lastDroppedItemState.value = null
-            }
-    }
-
-    // After a short delay, reset the last dropped item state to allow future drops to be processed.
-    // This is just in case the logic above didn't do it for some reason.
-    LaunchedEffect(lastDroppedItemState.value) {
-        if (lastDroppedItemState.value != null) {
-            delay(1000)
-            lastDroppedItemState.value = null
-        }
-    }
-}
-
-@Composable
 private fun ApplyOffsetIfNeeded(
     itemState: DraggableSwipeableItemState,
 ) {
@@ -852,6 +783,75 @@ private fun <TItem> NotifyItemIndicesChangedIfNeeded(
                 itemState.update { copy(pendingReorderCallbackInvocation = false) }
                 notifyItemIndicesChanged(itemsWithUpdatedIndex)
             }
+    }
+}
+
+@Composable
+private fun <TItem> EnsureDroppedItemIsFullyVisible(
+    state: DragDropSwipeLazyColumnState,
+    orderedItemsState: MutableState<ImmutableList<OrderedItem<TItem>>>,
+    lastDroppedItemState: MutableState<OrderedItem<TItem>?>,
+    key: (TItem) -> Any,
+) {
+    LaunchedEffect(
+        state,
+        orderedItemsState,
+        lastDroppedItemState,
+        key,
+    ) {
+        snapshotFlow {
+            val droppedItemToProcess = lastDroppedItemState.value
+            val droppedItemToProcessKey = droppedItemToProcess?.let { key(it.value) }
+            if (droppedItemToProcess != null && // there is a dropped item to process
+                droppedItemToProcessKey != state.draggedItemKey && // item is not being dragged anymore
+                orderedItemsState.value.any { // item is in the list and at its new index
+                    key(it.value) == droppedItemToProcessKey && it.initialIndex == droppedItemToProcess.newIndex
+                }
+            ) {
+                droppedItemToProcess
+            } else {
+                null
+            }
+        }
+            .filterNotNull()
+            .collect { droppedItem ->
+                val droppedItemInfo = state.lazyListState.layoutInfo.visibleItemsInfo.firstOrNull {
+                    it.key == key(droppedItem.value)
+                }
+                if (droppedItemInfo != null) {
+                    // If the item that just got dropped is not fully visible, we scroll to reveal it
+                    val listStart = state.lazyListState.layoutInfo.viewportStartOffset.toFloat()
+                    val listEnd = state.lazyListState.layoutInfo.viewportEndOffset.toFloat()
+                    val itemStart = droppedItemInfo.offset.toFloat()
+                    val itemEnd = itemStart + droppedItemInfo.size.toFloat() - 1f
+                    val hiddenHeightAtTheStart = (listStart - itemStart).fastCoerceAtLeast(0f)
+                    val hiddenHeightAtTheEnd = (itemEnd - listEnd).fastCoerceAtLeast(0f)
+                    val itemSpacing = state.lazyListState.layoutInfo.mainAxisItemSpacing
+                    when {
+                        hiddenHeightAtTheStart > 0f && hiddenHeightAtTheEnd == 0f -> {
+                            // Item is hidden at the start of the list, scroll to reveal it
+                            state.lazyListState.animateScrollBy(-hiddenHeightAtTheStart - itemSpacing)
+                        }
+
+                        hiddenHeightAtTheStart == 0f && hiddenHeightAtTheEnd > 0f -> {
+                            // Item is hidden at the end of the list, scroll to reveal it
+                            state.lazyListState.animateScrollBy(hiddenHeightAtTheEnd + itemSpacing)
+                        }
+                    }
+                }
+
+                // Reset the last dropped item state to avoid processing it again
+                lastDroppedItemState.value = null
+            }
+    }
+
+    // After a short delay, reset the last dropped item state to allow future drops to be processed.
+    // This is just in case the logic above didn't do it for some reason.
+    LaunchedEffect(lastDroppedItemState.value) {
+        if (lastDroppedItemState.value != null) {
+            delay(1000)
+            lastDroppedItemState.value = null
+        }
     }
 }
 

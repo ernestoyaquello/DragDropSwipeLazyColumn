@@ -32,7 +32,7 @@ object SwipeableItemDefaults {
     /**
      * The default minimum height of the swipeable item.
      */
-    val minHeight: Dp = Dp.Companion.Unspecified
+    val minHeight: Dp = Dp.Unspecified
 
     /**
      * The default start padding applied to the sides of the swipeable item.

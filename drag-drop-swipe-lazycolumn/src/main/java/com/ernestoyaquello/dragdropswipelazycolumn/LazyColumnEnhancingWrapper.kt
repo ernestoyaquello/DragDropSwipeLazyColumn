@@ -6,7 +6,6 @@ import androidx.compose.animation.core.Spring.DampingRatioNoBouncy
 import androidx.compose.animation.core.Spring.StiffnessMedium
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -76,7 +75,7 @@ import kotlin.math.roundToInt
  * when the layout is reversed. It should work fine in most cases though, but please only use it at
  * your own risk!
  *
- * @param modifier The [Modifier] that will be apply to the list.
+ * @param modifier The [Modifier] that will be applied to the list.
  * @param state The [LazyListState] of the underlying lazy column.
  * @param items The items to be displayed within the lazy column.
  * @param key A function that returns a unique key for each item.
@@ -277,7 +276,6 @@ private fun <TItem> EnsureNewItemAddedAtTheEndIsScrolledTo(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 @MultiPreview
 private fun LazyColumnEnhancingWrapper_InteractivePreview() {
