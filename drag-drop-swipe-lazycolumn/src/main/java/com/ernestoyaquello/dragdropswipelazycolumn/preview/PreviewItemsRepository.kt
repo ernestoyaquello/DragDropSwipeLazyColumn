@@ -36,7 +36,7 @@ internal class PreviewItemsRepository(
             // Update each item ensuring we find each one by its ID, as the index may have changed
             itemsToUpdate.forEach { itemToUpdate ->
                 val itemPosition = items.indexOfFirst { it.id == itemToUpdate.id }
-                if (itemPosition in (0 until items.size)) {
+                if (itemPosition in items.indices) {
                     items[itemPosition] = itemToUpdate
                 }
             }
@@ -50,7 +50,13 @@ internal class PreviewItemsRepository(
         itemToUpdate: PreviewItem,
     ) {
         itemsMutex.withLock {
-            items[itemToUpdate.index] = itemToUpdate.copy(locked = !itemToUpdate.locked)
+            // The supplied item can contain an old index or lock value, so find the current item by
+            // its stable ID and toggle the value held by the repository.
+            val itemPosition = items.indexOfFirst { it.id == itemToUpdate.id }
+            if (itemPosition >= 0) {
+                val currentItem = items[itemPosition]
+                items[itemPosition] = currentItem.copy(locked = !currentItem.locked)
+            }
         }
     }
 
@@ -58,9 +64,12 @@ internal class PreviewItemsRepository(
         itemToDelete: PreviewItem,
     ) {
         itemsMutex.withLock {
-            // Try to delete this item and then shit the indices of the remaining items
-            if (items.removeIf { it.id == itemToDelete.id }) {
-                matchItemIndicesToItemPositions(itemToDelete.index)
+            // Find the item by its stable ID because the caller's copy could contain an old index.
+            // Removing it by position also avoids List.removeIf(), which requires Android API 24.
+            val itemPosition = items.indexOfFirst { it.id == itemToDelete.id }
+            if (itemPosition >= 0) {
+                items.removeAt(itemPosition)
+                matchItemIndicesToItemPositions(itemPosition)
             }
         }
     }

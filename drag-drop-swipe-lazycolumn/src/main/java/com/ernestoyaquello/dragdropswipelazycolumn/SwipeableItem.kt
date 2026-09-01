@@ -40,13 +40,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +68,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick as semanticsOnClick
+import androidx.compose.ui.semantics.onLongClick as semanticsOnLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -96,6 +105,7 @@ import kotlin.math.abs
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 import kotlin.math.sign
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * A simple Composable that can be used to create a horizontally swipeable item.
@@ -115,18 +125,27 @@ import kotlin.math.sign
  *   no minimum horizontality for a horizontal swipe to be considered as such.
  * @param clickIndication The click indication to be applied to the item when it is clicked. It will
  *   only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
- *   swiped.
+ *   swiped or dismissed.
  * @param onClick The callback to be invoked when the item is clicked. It will only be invoked if
- *   the item is not being swiped.
+ *   the item is not being swiped or dismissed.
  * @param onLongClick The callback to be invoked when the item is long-clicked. It will only be
- *   invoked if the item is not being swiped.
+ *   invoked if the item is not being swiped or dismissed.
  * @param onSwipeGestureStart The callback to be invoked when the user starts swiping the item.
  * @param onSwipeGestureUpdate The callback to be invoked when the user is swiping the item and a
  *   swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
- * @param onSwipeGestureFinish The callback to be invoked when the user finishes swiping the item.
+ * @param onSwipeGestureFinish The callback to be invoked when a started swipe gesture ends, whether
+ *   normally or due to cancellation.
  * @param onSwipeDismiss The callback to be invoked when the user swipes the item far enough and/or
  *   fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
  *   will be provided as a parameter.
+ * @param onClickLabel An optional accessibility label for [onClick].
+ * @param onLongClickLabel An optional accessibility label for [onLongClick].
+ * @param dismissLeftToRightActionLabel The label for an accessibility action that invokes
+ *   [onSwipeDismiss] with [DismissSwipeDirection.LeftToRight]. The action is omitted when this is
+ *   `null` or that swipe direction is unavailable.
+ * @param dismissRightToLeftActionLabel The label for an accessibility action that invokes
+ *   [onSwipeDismiss] with [DismissSwipeDirection.RightToLeft]. The action is omitted when this is
+ *   `null` or that swipe direction is unavailable.
  * @param content The content of the item.
  */
 @Composable
@@ -147,8 +166,15 @@ fun SwipeableItem(
     onSwipeGestureUpdate: (swipeDeltaInPx: Float, pressed: Boolean) -> Unit = remember { { _, _ -> } },
     onSwipeGestureFinish: () -> Unit = remember { {} },
     onSwipeDismiss: (DismissSwipeDirection) -> Unit,
+    onClickLabel: String? = null,
+    onLongClickLabel: String? = null,
+    dismissLeftToRightActionLabel: String? = null,
+    dismissRightToLeftActionLabel: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val onSwipeGestureStartState = rememberUpdatedState(onSwipeGestureStart)
+    val onSwipeGestureUpdateState = rememberUpdatedState(onSwipeGestureUpdate)
+    val onSwipeGestureFinishState = rememberUpdatedState(onSwipeGestureFinish)
     var itemWidthInPx by remember { mutableFloatStateOf(0f) }
     var itemHeightInPx by remember { mutableFloatStateOf(0f) }
     var isItemBouncingBackToItsOriginalPosition by remember { mutableStateOf(false) }
@@ -156,15 +182,83 @@ fun SwipeableItem(
         Animatable(initialValue = state.offsetTargetInPx, typeConverter = Float.VectorConverter)
     }
 
-    // Ensure swipe actions that are canceled don't result in the item being dismissed
-    if (!state.isSwipeAllowed) {
-        state.update {
-            copy(
-                ongoingSwipeDirection = NotSwiping,
-                offsetTargetInPx = 0f,
-                lastVelocity = 0f,
+    // Ensure swipe actions that are canceled while the swipe gesture is in progress don't result in
+    // the item being dismissed.
+    val disabledSwipeNeedsCancellation = state.isBeingSwiped && !state.isSwipeAllowed
+    SideEffect {
+        if (disabledSwipeNeedsCancellation) {
+            state.update {
+                copy(
+                    ongoingSwipeDirection = NotSwiping,
+                    offsetTargetInPx = 0f,
+                    lastVelocity = 0f,
+                )
+            }
+        }
+    }
+
+    // Ensuring we don't enable actions while the visible content is being swiped or animated out of
+    // the layout.
+    val itemActionsAvailable = !state.isBeingSwiped && !state.isItemDismissedOrBeingDismissed
+    val availableOnClick = onClick?.takeIf { itemActionsAvailable }
+    val availableOnLongClick = onLongClick?.takeIf { itemActionsAvailable }
+    val availableOnClickState = rememberUpdatedState(availableOnClick)
+    val availableOnLongClickState = rememberUpdatedState(availableOnLongClick)
+
+    // Build custom accessibility actions so users with a screen reader can dismiss items too
+    val dismissActions = buildList {
+        if (
+            dismissLeftToRightActionLabel != null &&
+            state.isSwipeAllowed &&
+            itemActionsAvailable &&
+            state.allowedSwipeDirections.allows(LeftToRight)
+        ) {
+            add(
+                CustomAccessibilityAction(label = dismissLeftToRightActionLabel) {
+                    onSwipeDismiss(LeftToRight)
+                    true
+                },
             )
         }
+        if (
+            dismissRightToLeftActionLabel != null &&
+            state.isSwipeAllowed &&
+            itemActionsAvailable &&
+            state.allowedSwipeDirections.allows(RightToLeft)
+        ) {
+            add(
+                CustomAccessibilityAction(label = dismissRightToLeftActionLabel) {
+                    onSwipeDismiss(RightToLeft)
+                    true
+                },
+            )
+        }
+    }
+    val accessibilityActions = LocalAdditionalCustomAccessibilityActions.current + dismissActions
+    val exposeCustomAccessibilityActions = itemActionsAvailable && accessibilityActions.isNotEmpty()
+    val exposesItemSemantics = availableOnClick != null ||
+        availableOnLongClick != null ||
+        exposeCustomAccessibilityActions
+    val itemSemanticsModifier = if (exposesItemSemantics) {
+        Modifier.semantics(mergeDescendants = true) {
+            if (availableOnClick != null) {
+                semanticsOnClick(label = onClickLabel) {
+                    availableOnClick()
+                    true
+                }
+            }
+            if (availableOnLongClick != null) {
+                semanticsOnLongClick(label = onLongClickLabel) {
+                    availableOnLongClick()
+                    true
+                }
+            }
+            if (exposeCustomAccessibilityActions) {
+                customActions = accessibilityActions
+            }
+        }
+    } else {
+        Modifier
     }
 
     ApplySwipeOffsetIfNeeded(
@@ -179,6 +273,7 @@ fun SwipeableItem(
 
     Box(
         modifier = modifier
+            .then(itemSemanticsModifier)
             .fillMaxWidth()
             .padding(
                 start = contentStartPadding,
@@ -190,7 +285,7 @@ fun SwipeableItem(
             },
     ) {
         val localDensity = LocalDensity.current
-        val clickInteractionSource = remember(onClick, onLongClick) {
+        val clickInteractionSource = remember(availableOnClick != null, availableOnLongClick != null) {
             MutableInteractionSource()
         }
         val adjustedMinSwipeHorizontality = minSwipeHorizontality?.takeUnless { it == 0f }
@@ -257,41 +352,58 @@ fun SwipeableItem(
                 .fillMaxWidth()
                 .pointerInput(
                     clickInteractionSource,
-                    onClick,
-                    onLongClick,
+                    availableOnClick != null,
+                    availableOnLongClick != null,
                 ) {
                     handleTapGestures(
                         clickInteractionSource = clickInteractionSource,
-                        onClick = onClick,
-                        onLongClick = onLongClick,
+                        onClick = if (availableOnClick != null) {
+                            { availableOnClickState.value?.invoke() }
+                        } else {
+                            null
+                        },
+                        onLongClick = if (availableOnLongClick != null) {
+                            { availableOnLongClickState.value?.invoke() }
+                        } else {
+                            null
+                        },
                     )
                 }
-                .pointerInput(
-                    state,
-                    adjustedMinSwipeHorizontality,
-                    itemWidthInPx,
-                    localDensity,
-                    contentStartPadding,
-                    contentEndPadding,
-                    layoutDirection,
-                    onSwipeGestureStart,
-                    onSwipeGestureUpdate,
-                    onSwipeGestureFinish,
-                ) {
-                    awaitEachGesture {
-                        handleSwipeGestures(
-                            state = state,
-                            minSwipeHorizontality = adjustedMinSwipeHorizontality,
-                            itemWidthInPx = itemWidthInPx,
-                            contentStartPaddingInPx = with(localDensity) { contentStartPadding.toPx() },
-                            contentEndPaddingInPx = with(localDensity) { contentEndPadding.toPx() },
-                            layoutDirection = layoutDirection,
-                            onSwipeStart = onSwipeGestureStart,
-                            onSwipeUpdate = onSwipeGestureUpdate,
-                            onSwipeFinish = onSwipeGestureFinish,
-                        )
-                    }
-                }
+                .then(
+                    other = if (!state.isItemDismissedOrBeingDismissed) {
+                        Modifier.pointerInput(
+                            state,
+                            state.isSwipeAllowed,
+                            adjustedMinSwipeHorizontality,
+                            itemWidthInPx,
+                            localDensity,
+                            contentStartPadding,
+                            contentEndPadding,
+                            layoutDirection,
+                        ) {
+                            awaitEachGesture {
+                                handleSwipeGestures(
+                                    state = state,
+                                    minSwipeHorizontality = adjustedMinSwipeHorizontality,
+                                    itemWidthInPx = itemWidthInPx,
+                                    contentStartPaddingInPx = with(localDensity) {
+                                        contentStartPadding.toPx()
+                                    },
+                                    contentEndPaddingInPx = with(localDensity) {
+                                        contentEndPadding.toPx()
+                                    },
+                                    layoutDirection = layoutDirection,
+                                    onSwipeStart = { onSwipeGestureStartState.value(it) },
+                                    onSwipeUpdate = { delta, pressed -> onSwipeGestureUpdateState.value(delta, pressed) },
+                                    onSwipeFinish = { onSwipeGestureFinishState.value() },
+                                )
+                            }
+                        }
+                    } else {
+                        // Once dismissal starts, no new swipe should be able to alter its state.
+                        Modifier
+                    },
+                )
                 .offset {
                     IntOffset(
                         x = if (state.isBeingSwiped) {
@@ -321,7 +433,11 @@ fun SwipeableItem(
                     },
                 )
                 .then(
-                    other = if (clickIndication != null && !state.isBeingSwiped && (onClick != null || onLongClick != null)) {
+                    other = if (
+                        clickIndication != null &&
+                        (availableOnClick != null || availableOnLongClick != null) &&
+                        !state.isBeingSwiped // no click indication if the item is being swiped
+                    ) {
                         // The clipped click indication needs to be added here at the end so that
                         // it's shifted appropriately by the offset applied above.
                         Modifier
@@ -337,7 +453,13 @@ fun SwipeableItem(
                     },
                 ),
         ) {
-            content()
+            // The additional actions belong to this item only, so they shouldn't be inherited
+            // any further down below the Composable chain.
+            CompositionLocalProvider(
+                LocalAdditionalCustomAccessibilityActions provides emptyList(),
+            ) {
+                content()
+            }
         }
     }
 }
@@ -352,16 +474,16 @@ private fun ApplySwipeOffsetIfNeeded(
     onItemIsBouncingUpdated: (Boolean) -> Unit,
     onDismissedViaSwiping: (DismissSwipeDirection) -> Unit,
 ) {
+    val onItemIsBouncingUpdatedState = rememberUpdatedState(onItemIsBouncingUpdated)
+    val onDismissedViaSwipingState = rememberUpdatedState(onDismissedViaSwiping)
     LaunchedEffect(
         isUserSwiping,
         swipeOffsetTargetInPx,
         lastSwipeVelocity,
         isItemDismissedOrBeingDismissed,
-        onItemIsBouncingUpdated,
-        onDismissedViaSwiping,
     ) {
         // Do this immediately just in case the value was left as true in a canceled invocation
-        onItemIsBouncingUpdated(false)
+        onItemIsBouncingUpdatedState.value(false)
 
         // Either move immediately to wherever the user is swiping to, or animate to the target
         if (isUserSwiping) {
@@ -409,14 +531,14 @@ private fun ApplySwipeOffsetIfNeeded(
                         value <= swipeOffsetTargetInPx
                     }
                     if (isItemBouncing) {
-                        onItemIsBouncingUpdated(true)
+                        onItemIsBouncingUpdatedState.value(true)
                     }
                 }
             }
 
             // With this animation over, we know for a fact the item can no longer be bouncing
             if (isItemBouncing) {
-                onItemIsBouncingUpdated(false)
+                onItemIsBouncingUpdatedState.value(false)
             }
 
             // Lastly, we might need to invoke the callback to notify that the item was dismissed
@@ -426,7 +548,7 @@ private fun ApplySwipeOffsetIfNeeded(
                     swipeOffsetTargetInPx < 0f -> RightToLeft
                     else -> null // This should never happen, but just in case?
                 }
-                dismissDirection?.let { onDismissedViaSwiping(it) }
+                dismissDirection?.let { onDismissedViaSwipingState.value(it) }
             }
         }
     }
@@ -448,12 +570,13 @@ private fun SwipeableItemBehindContent(
     val defaultIconSize = 24.dp
     val animatedIconSize = remember { Animatable(24.dp, Dp.VectorConverter) }
     val minIconPadding = 24.dp
-    val maxIconPadding = (itemWidth - animatedIconSize.value) / 2f
+    val maxIconPadding = ((itemWidth - animatedIconSize.value) / 2f).coerceAtLeast(0.dp)
+    val correctedMinIconPadding = minIconPadding.coerceAtMost(maxIconPadding)
     val extraIconSize = animatedIconSize.value - defaultIconSize
     val absSwipeOffset = currentSwipeOffset * currentSwipeOffset.value.sign
     val iconPadding = ((absSwipeOffset - minIconPadding) / 2f).coerceAtLeast(0.dp)
     val correctedIconPadding = (iconPadding - (extraIconSize / 2f)).coerceIn(
-        minimumValue = minIconPadding,
+        minimumValue = correctedMinIconPadding,
         maximumValue = maxIconPadding,
     )
     val iconRevealPercentage = (iconPadding / (minIconPadding * 1.25f)).absoluteValue
@@ -559,8 +682,8 @@ private suspend fun PointerInputScope.handleTapGestures(
                 // Delay to avoid the ripple effect being shown when the item is being swiped.
                 // This isn't perfect, and it makes the tap gesture feel a bit delayed, but I
                 // am not sure how to do it better.
-                // FIXME Do this better
-                delay(50)
+                // FIXME Do this better somehow?
+                delay(50.milliseconds)
 
                 val press = PressInteraction.Press(offset)
                 clickInteractionSource.emit(press)
@@ -588,129 +711,141 @@ private suspend fun AwaitPointerEventScope.handleSwipeGestures(
     onSwipeFinish: () -> Unit,
 ) {
     var lastSwipe: PointerInputChange? = null
-    val handleSwipe: (PointerInputChange?, PointerInputChange) -> Unit = { down, swipe ->
+    fun handleSwipe(down: PointerInputChange?, swipe: PointerInputChange): Boolean {
         val swipeDelta = swipe.position.x - swipe.previousPosition.x
-        if (state.isSwipeAllowed && (
-                    state.allowedSwipeDirections == All
-                            || (state.allowedSwipeDirections != None && down == null)
-                            || (state.allowedSwipeDirections == OnlyLeftToRight && swipeDelta > 0f)
-                            || (state.allowedSwipeDirections == OnlyRightToLeft && swipeDelta < 0f)
-                    )
-        ) {
-            down?.consume()
-            swipe.consume()
-            lastSwipe = swipe
-
-            state.update {
-                val ongoingSwipeDirection = when {
-                    down != null && swipeDelta > 0f -> SwipingLeftToRight
-                    down != null && swipeDelta < 0f -> SwipingRightToLeft
-                    else -> ongoingSwipeDirection
-                }
-                val offsetTargetInPx = when (ongoingSwipeDirection) {
-                    SwipingLeftToRight -> (offsetTargetInPx + swipeDelta).coerceAtLeast(
-                        minimumValue = if (allowedSwipeDirections == All) Float.NEGATIVE_INFINITY else 0f,
-                    )
-
-                    SwipingRightToLeft -> (offsetTargetInPx + swipeDelta).coerceAtMost(
-                        maximumValue = if (allowedSwipeDirections == All) Float.POSITIVE_INFINITY else 0f,
-                    )
-
-                    NotSwiping -> 0f
-                }
-                val timeDelta = swipe.uptimeMillis - swipe.previousUptimeMillis
-                val lastVelocity = if (timeDelta > 0f) {
-                    1000f * (swipeDelta / timeDelta.toFloat())
-                } else {
-                    0f
-                }
-
-                copy(
-                    ongoingSwipeDirection = ongoingSwipeDirection,
-                    offsetTargetInPx = offsetTargetInPx,
-                    lastVelocity = lastVelocity,
-                )
-            }
+        val directionIsAllowed = state.allowedSwipeDirections == All ||
+            (state.allowedSwipeDirections != None && down == null) ||
+            (state.allowedSwipeDirections == OnlyLeftToRight && swipeDelta > 0f) ||
+            (state.allowedSwipeDirections == OnlyRightToLeft && swipeDelta < 0f)
+        if (!state.isSwipeAllowed || !directionIsAllowed) {
+            return false
         }
-    }
 
-    // Detect the swipe gesture by listening for the first touch event that goes over the slop
-    val down = awaitFirstDown()
-    var swipeStarted = false
-    var swipe = awaitHorizontalTouchSlopOrCancellation(pointerId = down.id) { potentialSwipe, _ ->
-        // Only handle the swipe if the horizontal delta is greater than the vertical delta,
-        // as we only care about horizontal swipes.
-        val potentialSwipeDelta = potentialSwipe.position.x - potentialSwipe.previousPosition.x
-        val verticalDelta = potentialSwipe.position.y - potentialSwipe.previousPosition.y
-        val horizontalSlope = if (verticalDelta != 0f) {
-            abs(potentialSwipeDelta / verticalDelta)
-        } else {
-            Float.POSITIVE_INFINITY
-        }
-        if (minSwipeHorizontality == null || horizontalSlope >= minSwipeHorizontality) {
-            handleSwipe(down, potentialSwipe)
-            onSwipeStart(potentialSwipeDelta)
-            swipeStarted = true
-        }
-    }
+        down?.consume()
+        swipe.consume()
+        lastSwipe = swipe
 
-    // If we detect it, we need to keep listening for the rest of the swipe gesture
-    while (swipe != null && swipe.pressed && state.isSwipeAllowed) {
-        swipe = awaitHorizontalDragOrCancellation(pointerId = swipe.id)
-        if (swipe != null) {
-            val swipeToHandle = if (swipe.pressed) {
-                swipe
-            } else {
-                // Let's take into account the time when the user stopped pressing. This way, if the
-                // user swiped, then stopped for a while, and then released, we would consider the
-                // extra time that it took them to release as part of the last swipe change, which
-                // in turn will ensure that we won't launch the item to its dismissal in cases when
-                // the user purposely stopped the swipe movement before releasing.
-                requireNotNull(lastSwipe).copy(
-                    uptimeMillis = swipe.uptimeMillis,
-                    position = swipe.position,
-                )
-            }
-            handleSwipe(null, swipeToHandle)
-
-            val swipeDeltaInPx = swipeToHandle.position.x - swipeToHandle.previousPosition.x
-            onSwipeUpdate(swipeDeltaInPx, swipe.pressed)
-        }
-    }
-
-    if (state.isBeingSwiped) {
-        // Finally, now that the swiping has ended, let's see if we should dismiss the item or not
-        val speedRatioThreshold = 0.12f
-        val horizontalPadding = contentStartPaddingInPx + contentEndPaddingInPx
-        val speedRatio = abs(state.lastVelocity / (itemWidthInPx + horizontalPadding))
-        val absDistanceRatio = abs(state.offsetTargetInPx / itemWidthInPx)
-        val distanceSign = state.offsetTargetInPx.sign
-        val wasCancelled = swipe == null || !state.isSwipeAllowed
-        val velocitySign = state.lastVelocity.sign
-        val isValidDirection = velocitySign == distanceSign || speedRatio < speedRatioThreshold
-        val dismissViaSpeed = isValidDirection && speedRatio >= speedRatioThreshold
-        val dismissViaDistance = isValidDirection && absDistanceRatio >= 0.5f
         state.update {
+            val ongoingSwipeDirection = when {
+                down != null && swipeDelta > 0f -> SwipingLeftToRight
+                down != null && swipeDelta < 0f -> SwipingRightToLeft
+                else -> ongoingSwipeDirection
+            }
+            val offsetTargetInPx = when (ongoingSwipeDirection) {
+                SwipingLeftToRight -> (offsetTargetInPx + swipeDelta).coerceAtLeast(
+                    minimumValue = if (allowedSwipeDirections == All) Float.NEGATIVE_INFINITY else 0f,
+                )
+
+                SwipingRightToLeft -> (offsetTargetInPx + swipeDelta).coerceAtMost(
+                    maximumValue = if (allowedSwipeDirections == All) Float.POSITIVE_INFINITY else 0f,
+                )
+
+                NotSwiping -> 0f
+            }
+            val timeDelta = swipe.uptimeMillis - swipe.previousUptimeMillis
+            val lastVelocity = if (timeDelta > 0f) {
+                1000f * (swipeDelta / timeDelta.toFloat())
+            } else {
+                0f
+            }
+
             copy(
-                ongoingSwipeDirection = NotSwiping,
-                offsetTargetInPx = if (!wasCancelled && (dismissViaSpeed || dismissViaDistance)) {
-                    // Push over the edge to dismiss, adding a +1 for good measure
-                    val paddingToCoverInPx = if (distanceSign > 0f) {
-                        if (layoutDirection == Ltr) contentEndPaddingInPx else contentStartPaddingInPx
-                    } else {
-                        if (layoutDirection == Ltr) contentStartPaddingInPx else contentEndPaddingInPx
-                    }
-                    distanceSign * (itemWidthInPx + paddingToCoverInPx + 1f)
-                } else {
-                    // Unsuccessful dismissal, back to the original position
-                    0f
-                },
+                ongoingSwipeDirection = ongoingSwipeDirection,
+                offsetTargetInPx = offsetTargetInPx,
+                lastVelocity = lastVelocity,
             )
         }
+        return true
     }
 
-    if (swipeStarted) {
-        onSwipeFinish()
+    var swipeStarted = false
+    var swipe: PointerInputChange? = null
+    var gestureCompletedNormally = false
+    try {
+        // Detect the swipe gesture by listening for the first touch event that goes over the slop.
+        val down = awaitFirstDown()
+        swipe = awaitHorizontalTouchSlopOrCancellation(pointerId = down.id) { potentialSwipe, _ ->
+            // Only handle the swipe if the horizontal delta is greater than the vertical delta,
+            // as we only care about horizontal swipes.
+            val potentialSwipeDelta = potentialSwipe.position.x - potentialSwipe.previousPosition.x
+            val verticalDelta = potentialSwipe.position.y - potentialSwipe.previousPosition.y
+            val horizontalSlope = if (verticalDelta != 0f) {
+                abs(potentialSwipeDelta / verticalDelta)
+            } else {
+                Float.POSITIVE_INFINITY
+            }
+            if (
+                (minSwipeHorizontality == null || horizontalSlope >= minSwipeHorizontality) &&
+                handleSwipe(down, potentialSwipe)
+            ) {
+                // Record ownership before invoking app code so cancellation or an exception still
+                // runs the matching finish callback and state cleanup below.
+                swipeStarted = true
+                onSwipeStart(potentialSwipeDelta)
+            }
+        }
+
+        // If we detect it, keep listening while this gesture still owns an active swipe.
+        while (swipe?.pressed == true && state.isBeingSwiped && state.isSwipeAllowed) {
+            swipe = awaitHorizontalDragOrCancellation(pointerId = swipe.id)
+            if (swipe != null && state.isBeingSwiped && state.isSwipeAllowed) {
+                val swipeToHandle = if (swipe.pressed) {
+                    swipe
+                } else {
+                    // Include the pause before release in the last velocity calculation so a
+                    // deliberately stopped swipe is not launched into a dismissal.
+                    requireNotNull(lastSwipe).copy(
+                        uptimeMillis = swipe.uptimeMillis,
+                        position = swipe.position,
+                    )
+                }
+                if (handleSwipe(null, swipeToHandle)) {
+                    val swipeDeltaInPx = swipeToHandle.position.x - swipeToHandle.previousPosition.x
+                    onSwipeUpdate(swipeDeltaInPx, swipe.pressed)
+                }
+            }
+        }
+
+        gestureCompletedNormally = swipe?.pressed == false &&
+            state.isBeingSwiped &&
+            state.isSwipeAllowed
+    } finally {
+        if (state.isBeingSwiped) {
+            // Now that the swipe has ended, decide whether it dismisses the item. Any coroutine
+            // cancellation is treated as an unsuccessful swipe and returns the item to its origin.
+            val speedRatioThreshold = 0.12f
+            val horizontalPadding = contentStartPaddingInPx + contentEndPaddingInPx
+            val speedRatio = abs(state.lastVelocity / (itemWidthInPx + horizontalPadding))
+            val absDistanceRatio = abs(state.offsetTargetInPx / itemWidthInPx)
+            val distanceSign = state.offsetTargetInPx.sign
+            val velocitySign = state.lastVelocity.sign
+            val isValidDirection = velocitySign == distanceSign || speedRatio < speedRatioThreshold
+            val dismissViaSpeed = isValidDirection && speedRatio >= speedRatioThreshold
+            val dismissViaDistance = isValidDirection && absDistanceRatio >= 0.5f
+            state.update {
+                copy(
+                    ongoingSwipeDirection = NotSwiping,
+                    offsetTargetInPx = if (
+                        gestureCompletedNormally && (dismissViaSpeed || dismissViaDistance)
+                    ) {
+                        // Push over the edge to dismiss, adding a +1 for good measure.
+                        val paddingToCoverInPx = if (distanceSign > 0f) {
+                            if (layoutDirection == Ltr) contentEndPaddingInPx else contentStartPaddingInPx
+                        } else {
+                            if (layoutDirection == Ltr) contentStartPaddingInPx else contentEndPaddingInPx
+                        }
+                        distanceSign * (itemWidthInPx + paddingToCoverInPx + 1f)
+                    } else {
+                        // Unsuccessful dismissal, back to the original position.
+                        0f
+                    },
+                )
+            }
+        }
+
+        if (swipeStarted) {
+            onSwipeFinish()
+        }
     }
 }
 
@@ -758,6 +893,17 @@ enum class DismissSwipeDirectionLayoutAdjusted {
     EndToStart,
 }
 
+private fun AllowedSwipeDirections.allows(
+    direction: DismissSwipeDirection,
+) = when (direction) {
+    LeftToRight -> this == All || this == OnlyLeftToRight
+    RightToLeft -> this == All || this == OnlyRightToLeft
+}
+
+/** Additional actions supplied by [DraggableSwipeableItem] for the same item semantics node. */
+internal val LocalAdditionalCustomAccessibilityActions =
+    compositionLocalOf<List<CustomAccessibilityAction>> { emptyList() }
+
 @Composable
 fun DismissSwipeDirection.toLayoutAdjustedDirection() = toLayoutAdjustedDirection(
     layoutDirection = LocalLayoutDirection.current,
@@ -798,7 +944,7 @@ private fun SwipeableItem_InteractivePreview_Basic() {
         if (numberOfSwipes > 0) {
             LaunchedEffect(numberOfSwipes) {
                 // Reset after a while so we can keep clicking, swiping, etc
-                delay(300)
+                delay(300.milliseconds)
                 swipeState.reset()
             }
         }
@@ -864,7 +1010,7 @@ private fun SwipeableItem_InteractivePreview_Customized() {
         if (numberOfDeleted > 0 || numberOfFavorited > 0) {
             LaunchedEffect(numberOfDeleted + numberOfFavorited) {
                 // Reset after a while so we can keep clicking, swiping, etc
-                delay(300)
+                delay(300.milliseconds)
                 swipeState.reset()
             }
         }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.annotation.RememberInComposition
 import androidx.compose.runtime.mutableStateOf
 import com.ernestoyaquello.dragdropswipelazycolumn.AllowedSwipeDirections
+import com.ernestoyaquello.dragdropswipelazycolumn.DraggableSwipeableItem
 
 @Immutable
 class DraggableSwipeableItemState internal constructor(
@@ -20,7 +21,6 @@ class DraggableSwipeableItemState internal constructor(
         val currentDragIndex: Int? = null,
         val offsetTargetInPx: Float = 0f,
         val pendingReorderCallbackInvocation: Boolean = false,
-        val onDragFinishCallback: () -> Unit = {},
     )
 
     private val internalState = mutableStateOf(
@@ -70,7 +70,7 @@ class DraggableSwipeableItemState internal constructor(
         get() = swipeableItemState.isBeingSwiped
 
     /**
-     * Indicates whether the item is currently dismissed or being being animated into its dismissal,
+     * Indicates whether the item is currently dismissed or being animated into its dismissal,
      * which will only happen if the user swiped it (and released it) far enough and/or fast enough.
      */
     val isItemDismissedOrBeingDismissed
@@ -100,12 +100,16 @@ class DraggableSwipeableItemState internal constructor(
     /**
      * The callback to be invoked once the drag operation finishes.
      */
-    internal val onDragFinishCallback
-        get() = internalState.value.onDragFinishCallback
+    internal var onDragFinishCallback: () -> Unit = {}
 
     /**
      * Resets the state of the swipeable item, bringing it back to its initial position if needed.
      * It can be useful to bring the item back after a swipe dismissal that couldn't be handled.
+     * Useful in cases such as when the swipe was meant to delete an item, but the deletion failed.
+     * Please note that, once the item is recomposed, its allowed swipe directions will reset back
+     * to whatever value is being provided via `allowedSwipeDirections` to [DraggableSwipeableItem],
+     * meaning that this call is just a temporary measure to bring back unsuccessfully removed items
+     * from the "swiped away" state.
      */
     fun resetSwipeableState(
         allowedSwipeDirections: AllowedSwipeDirections? = null,
@@ -113,6 +117,9 @@ class DraggableSwipeableItemState internal constructor(
         swipeableItemState.reset(allowedSwipeDirections)
     }
 
+    /**
+     * Updates the internal state that is publicly exposed only indirectly via getters.
+     */
     internal fun update(
         update: State.() -> State,
     ) {

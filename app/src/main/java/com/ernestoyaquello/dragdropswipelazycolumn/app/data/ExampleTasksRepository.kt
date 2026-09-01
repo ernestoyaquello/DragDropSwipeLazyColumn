@@ -32,7 +32,7 @@ internal class ExampleTasksRepositoryImpl(
     private var nextTaskId = initialNumberOfTasks
 
     override suspend fun getTasks() = tasksMutex.withLock {
-        tasks
+        tasks.toList()
     }
 
     override suspend fun addTask(
@@ -71,7 +71,7 @@ internal class ExampleTasksRepositoryImpl(
             // Update each task ensuring we find each one by its ID, as the index may have changed
             tasksToUpdate.forEach { taskToUpdate ->
                 val taskPosition = tasks.indexOfFirst { it.id == taskToUpdate.id }
-                if (taskPosition in (0 until tasks.size)) {
+                if (taskPosition in tasks.indices) {
                     tasks[taskPosition] = taskToUpdate
                 }
             }
@@ -85,9 +85,11 @@ internal class ExampleTasksRepositoryImpl(
         taskToUpdate: ExampleTask,
     ) {
         tasksMutex.withLock {
-            tasks[taskToUpdate.index] = taskToUpdate.copy(
-                isCompleted = !taskToUpdate.isCompleted,
-            )
+            val taskPosition = tasks.indexOfFirst { it.id == taskToUpdate.id }
+            if (taskPosition >= 0) {
+                val currentTask = tasks[taskPosition]
+                tasks[taskPosition] = currentTask.copy(isCompleted = !currentTask.isCompleted)
+            }
         }
     }
 
@@ -95,9 +97,11 @@ internal class ExampleTasksRepositoryImpl(
         taskToUpdate: ExampleTask,
     ) {
         tasksMutex.withLock {
-            tasks[taskToUpdate.index] = taskToUpdate.copy(
-                isLocked = !taskToUpdate.isLocked,
-            )
+            val taskPosition = tasks.indexOfFirst { it.id == taskToUpdate.id }
+            if (taskPosition >= 0) {
+                val currentTask = tasks[taskPosition]
+                tasks[taskPosition] = currentTask.copy(isLocked = !currentTask.isLocked)
+            }
         }
     }
 
@@ -113,9 +117,12 @@ internal class ExampleTasksRepositoryImpl(
         taskToDelete: ExampleTask,
     ) {
         tasksMutex.withLock {
-            // Try to delete this task and then shit the indices of the remaining tasks
-            if (tasks.removeIf { it.id == taskToDelete.id }) {
-                matchTaskIndicesToTaskPositions(taskToDelete.index)
+            // Find the current position before removing. The position captured by the UI can be
+            // stale when two dismiss animations complete close together.
+            val taskPosition = tasks.indexOfFirst { it.id == taskToDelete.id }
+            if (taskPosition >= 0) {
+                tasks.removeAt(taskPosition)
+                matchTaskIndicesToTaskPositions(taskPosition)
             }
         }
     }

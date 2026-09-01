@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.LayoutDirection.Ltr
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -221,6 +222,8 @@ private fun TaskList(
         val layoutDirection = LocalLayoutDirection.current
         Task(
             modifier = getTaskModifier(index, task),
+            index = index,
+            isLastIndex = index == tasks.lastIndex,
             task = task,
             onClick = { onTaskClick(task) }.takeUnless { task.isLocked },
             onLongClick = { onTaskLongClick(task) },
@@ -239,11 +242,17 @@ private fun TaskList(
 @Composable
 private fun DraggableSwipeableItemScope<ExampleTask>.Task(
     modifier: Modifier,
+    index: Int,
+    isLastIndex: Boolean,
     task: ExampleTask,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
     onSwipeDismiss: (DismissSwipeDirection) -> Unit,
 ) {
+    val layoutDirection = LocalLayoutDirection.current
+    val archiveActionLabel = "Archive ${task.title}"
+    val removeActionLabel = "Remove ${task.title}"
+
     DraggableSwipeableItem(
         modifier = modifier.animateDraggableSwipeableItem(),
         colors = DraggableSwipeableItemColors.createRememberedWithLayoutDirection(
@@ -279,6 +288,14 @@ private fun DraggableSwipeableItemScope<ExampleTask>.Task(
         onClick = onClick,
         onLongClick = onLongClick,
         onSwipeDismiss = onSwipeDismiss,
+        onLongClickLabel = if (task.isLocked) "Unlock ${task.title}" else "Lock ${task.title}",
+        // These APIs describe physical directions, while the actions are defined using logical
+        // start and end edges, so their labels must swap in a right-to-left layout.
+        dismissLeftToRightActionLabel = if (layoutDirection == Ltr) archiveActionLabel else removeActionLabel,
+        dismissRightToLeftActionLabel = if (layoutDirection == Ltr) removeActionLabel else archiveActionLabel,
+        moveUpActionLabel = "Move ${task.title} up".takeIf { !task.isLocked && index > 0 },
+        moveDownActionLabel = "Move ${task.title} down".takeIf { !task.isLocked && !isLastIndex },
+        keyboardReorderEnabled = true,
     ) {
         TaskLayout(
             modifier = Modifier

@@ -8,14 +8,15 @@ plugins {
 }
 
 group = "com.ernestoyaquello.dragdropswipelazycolumn"
-version = "0.10.2"
+version = "0.11.0"
 
 configure<LibraryExtension> {
     namespace = "com.ernestoyaquello.dragdropswipelazycolumn"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 23
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -34,15 +35,44 @@ configure<LibraryExtension> {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        managedDevices {
+            localDevices {
+                create("pixel2Api30") {
+                    device = "Pixel 2"
+                    apiLevel = 30
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
+    }
 }
 
 dependencies {
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.kotlinx.collections.immutable)
-    implementation(libs.androidx.compose.material3)
+    api(platform(libs.androidx.compose.bom))
+    api(libs.androidx.compose.animation)
+    api(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.compose.material3)
+    api(libs.androidx.compose.runtime)
+    api(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    api(libs.kotlinx.collections.immutable)
+    implementation(libs.kotlinx.coroutines.core)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.core)
+    // This is a transitive dependency, so technically we don't need it here;
+    // however, we have to set it to a higher version to avoid a crash on SDK 37.
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.junit4)
 }
 
 mavenPublishing {

@@ -25,6 +25,21 @@ jobs:
           server-username: ${{ secrets.OSSRH_USERNAME }}
           server-password: ${{ secrets.OSSRH_PASSWORD }}
 
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Android instrumentation tests
+        timeout-minutes: 30
+        run: >-
+          ./gradlew
+          :drag-drop-swipe-lazycolumn:pixel2Api30DebugAndroidTest
+          -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
+          --no-configuration-cache
+          --stacktrace
+
       - name: Publish
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername:  ${{ secrets.OSSRH_USERNAME }}

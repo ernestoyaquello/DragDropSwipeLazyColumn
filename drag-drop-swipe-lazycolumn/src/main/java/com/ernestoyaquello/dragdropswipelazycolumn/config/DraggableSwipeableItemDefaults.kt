@@ -23,7 +23,7 @@ object DraggableSwipeableItemDefaults {
      * are considered valid swipes, thus avoiding accidental swipes caused by attempts at scrolling
      * vertically through the list.
      */
-    const val minSwipeHorizontality = 2.5f
+    const val MIN_SWIPE_HORIZONTALITY = 2.5f
 
     /**
      * The default shadow elevation applied to the item while it is being dragged.
@@ -83,7 +83,7 @@ data class DraggableSwipeableItemColors private constructor(
 
         /**
          * Creates a [DraggableSwipeableItemColors] instance with the specified colors.
-         * 
+         *
          * @param containerBackgroundColor The background color of the item container.
          * @param containerBackgroundColorWhileDragged The background color of the item container
          *   while it is being dragged.

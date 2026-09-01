@@ -54,7 +54,7 @@ class SwipeableItemState internal constructor(
         get() = ongoingSwipeDirection != NotSwiping
 
     /**
-     * Indicates whether the item is currently dismissed or being being animated into its dismissal,
+     * Indicates whether the item is currently dismissed or being animated into its dismissal,
      * which will only happen if the user swiped it (and released it) far enough and/or fast enough.
      */
     val isItemDismissedOrBeingDismissed

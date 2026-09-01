@@ -299,7 +299,6 @@ private fun LazyColumnEnhancingWrapper_InteractivePreview() {
                     items = items,
                     key = remember { { it.id } },
                 ) { listModifier, getItemModifier ->
-                    // We are using a DragDropSwipeLazyColumn, but it could just be a LazyColumn
                     DragDropSwipeLazyColumn(
                         modifier = listModifier.fillMaxSize(),
                         state = listState,
@@ -324,6 +323,21 @@ private fun LazyColumnEnhancingWrapper_InteractivePreview() {
                             ),
                             minHeight = 56.dp,
                             allowedSwipeDirections = if (!item.locked) All else None,
+                            dragDropEnabled = !item.locked,
+                            onLongClickLabel = if (item.locked) {
+                                "Unlock ${item.title}"
+                            } else {
+                                "Lock ${item.title}"
+                            },
+                            dismissLeftToRightActionLabel = "Remove ${item.title}",
+                            dismissRightToLeftActionLabel = "Remove ${item.title}",
+                            moveUpActionLabel = "Move ${item.title} up".takeIf {
+                                !item.locked && index > 0
+                            },
+                            moveDownActionLabel = "Move ${item.title} down".takeIf {
+                                !item.locked && index < items.lastIndex
+                            },
+                            keyboardReorderEnabled = true,
                             onClick = { viewModel.onItemClick(item) },
                             onLongClick = { viewModel.onItemLongClick(item) },
                             onSwipeDismiss = { viewModel.onItemSwipeDismiss(item) },

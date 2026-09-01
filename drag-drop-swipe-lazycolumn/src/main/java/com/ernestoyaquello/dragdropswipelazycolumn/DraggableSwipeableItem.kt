@@ -3,6 +3,7 @@ package com.ernestoyaquello.dragdropswipelazycolumn
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Indication
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitVerticalDragOrCancellation
@@ -12,23 +13,33 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -41,6 +52,7 @@ import com.ernestoyaquello.dragdropswipelazycolumn.config.DraggableSwipeableItem
 import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemDefaults
 import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemIcons
 import com.ernestoyaquello.dragdropswipelazycolumn.config.SwipeableItemShapes
+import com.ernestoyaquello.dragdropswipelazycolumn.state.DragDropSwipeLazyColumnState
 import com.ernestoyaquello.dragdropswipelazycolumn.state.DraggableSwipeableItemState
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -73,22 +85,41 @@ import kotlin.math.roundToInt
  *   being dragged. It will only be applied if [applyShadowElevationWhenDragged] is set to `true`.
  * @param clickIndication The click indication to be applied to the item when it is clicked. It will
  *   only be applied if either [onClick] or [onLongClick] is not `null` and the item is not being
- *   dragged or swiped.
+ *   dragged, swiped, or dismissed.
  * @param onClick The callback to be invoked when the item is clicked. It will only be invoked if
- *   the item is not being dragged or swiped.
+ *   the item is not being dragged, swiped, or dismissed.
  * @param onLongClick The callback to be invoked when the item is long-clicked. It will only be
- *   invoked if the item is not being dragged or swiped.
+ *   invoked if the item is not being dragged, swiped, or dismissed.
  * @param onDragStart The callback to be invoked when the user starts dragging the item.
  * @param onDragUpdate The callback to be invoked when the user is dragging the item and a drag
  *   delta in pixels is detected, meaning that the user has dragged the item by some amount.
- * @param onDragFinish The callback to be invoked when the user finishes dragging the item.
+ * @param onDragFinish The callback to be invoked when a started drag ends, whether normally or due
+ *   to cancellation. This is a gesture lifecycle callback, not the callback where the items
+ *   supplied to the [DragDropSwipeLazyColumn] are expected to be updated. Update them from the
+ *   list's reorder callback instead, not here.
  * @param onSwipeGestureStart The callback to be invoked when the user starts swiping the item.
  * @param onSwipeGestureUpdate The callback to be invoked when the user is swiping the item and a
  *   swipe delta in pixels is detected, meaning that the user has swiped the item by some amount.
- * @param onSwipeGestureFinish The callback to be invoked when the user finishes swiping the item.
+ * @param onSwipeGestureFinish The callback to be invoked when a started swipe gesture ends, whether
+ *   normally or due to cancellation.
  * @param onSwipeDismiss The callback to be invoked when the user swipes the item far enough and/or
  *   fast enough to trigger the dismissal of the item. The direction in which the item was dismissed
  *   will be provided as a parameter.
+ * @param onClickLabel An optional accessibility label for [onClick].
+ * @param onLongClickLabel An optional accessibility label for [onLongClick].
+ * @param dismissLeftToRightActionLabel The label for an accessibility action that dismisses the
+ *   item from left to right. The action is omitted when the label is `null` or that direction is
+ *   unavailable.
+ * @param dismissRightToLeftActionLabel The label for an accessibility action that dismisses the
+ *   item from right to left. The action is omitted when the label is `null` or that direction is
+ *   unavailable.
+ * @param moveUpActionLabel The label for an accessibility action that moves the item one visual
+ *   position up. The action is omitted when the label is `null` or the item cannot move further.
+ * @param moveDownActionLabel The label for an accessibility action that moves the item one visual
+ *   position down. The action is omitted when the label is `null` or the item cannot move further.
+ * @param keyboardReorderEnabled Whether Alt+Up and Alt+Down can move the item by one position. This
+ *   is opt-in because it makes the item focusable, and it works independently of the optional
+ *   accessibility action labels.
  * @param content The content of the item.
  */
 @Composable
@@ -98,7 +129,7 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
     shapes: SwipeableItemShapes = SwipeableItemDefaults.shapes(),
     icons: SwipeableItemIcons = SwipeableItemDefaults.icons(),
     minHeight: Dp = SwipeableItemDefaults.minHeight,
-    minSwipeHorizontality: Float? = DraggableSwipeableItemDefaults.minSwipeHorizontality,
+    minSwipeHorizontality: Float? = DraggableSwipeableItemDefaults.MIN_SWIPE_HORIZONTALITY,
     allowedSwipeDirections: AllowedSwipeDirections = All,
     dragDropEnabled: Boolean = true,
     applyShadowElevationWhenDragged: Boolean = true,
@@ -113,22 +144,38 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
     onSwipeGestureUpdate: (swipeDeltaInPx: Float, pressed: Boolean) -> Unit = remember { { _, _ -> } },
     onSwipeGestureFinish: () -> Unit = remember { {} },
     onSwipeDismiss: (DismissSwipeDirection) -> Unit = remember { {} },
+    onClickLabel: String? = null,
+    onLongClickLabel: String? = null,
+    dismissLeftToRightActionLabel: String? = null,
+    dismissRightToLeftActionLabel: String? = null,
+    moveUpActionLabel: String? = null,
+    moveDownActionLabel: String? = null,
+    keyboardReorderEnabled: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    // Set the drag finish callback so that the list can access it when needed
-    itemState.update {
-        copy(
-            onDragFinishCallback = onDragFinish,
-        )
-    }
+    val onDragStartState = rememberUpdatedState(onDragStart)
+    val onDragUpdateState = rememberUpdatedState(onDragUpdate)
+    val onDragFinishState = rememberUpdatedState(onDragFinish)
+    val forceDisableSwipe = listState.draggedItemKey != null || allowedSwipeDirections == None
+    SideEffect {
+        // Set the drag finish callback so that the list can access it when needed
+        itemState.onDragFinishCallback = { onDragFinishState.value() }
 
-    // Set the allowed swiping directions and ensure that the swipe functionality gets temporarily
-    // disabled while the user is dragging any item.
-    itemState.swipeableItemState.update {
-        copy(
-            allowedSwipeDirections = allowedSwipeDirections,
-            forceDisableSwipe = listState.draggedItemKey != null || allowedSwipeDirections == None,
-        )
+        // Set the allowed swiping directions and ensure that the swipe functionality gets
+        // temporarily disabled while the user is dragging any item.
+        itemState.swipeableItemState.update {
+            if (
+                this.allowedSwipeDirections == allowedSwipeDirections &&
+                this.forceDisableSwipe == forceDisableSwipe
+            ) {
+                this
+            } else {
+                copy(
+                    allowedSwipeDirections = allowedSwipeDirections,
+                    forceDisableSwipe = forceDisableSwipe,
+                )
+            }
+        }
     }
 
     // Apply a shadow when the item is being dragged, ensuring to account for the horizontal padding
@@ -174,124 +221,194 @@ fun <TItem> DraggableSwipeableItemScope<TItem>.DraggableSwipeableItem(
         }
     }
 
-    SwipeableItem(
-        modifier = modifier
-            .onSizeChanged {
-                widthInPx = it.width.toFloat()
-                height = with(localDensity) { it.height.toDp() }
-            }
-            .defaultMinSize(
-                minHeight = minHeight,
-            )
-            .offset {
-                IntOffset(
-                    x = 0,
-                    y = if (itemState.isBeingDragged && itemState.currentDragIndex == currentIndex) {
-                        // The user is dragging the item, so we want to apply the offset immediately
-                        // to ensure the user's pointer input is followed as quickly as possible and
-                        // without potential animation delays (even though we use "snap to" on the
-                        // offset animatable when the item is being dragged, there might be a tiny
-                        // delay before the "snap to" action is invoked at all, so here we just
-                        // reference the offset directly, as it is guaranteed to be up to date).
-                        itemState.offsetTargetInPx.roundToInt()
-                    } else {
-                        // Otherwise, just apply the animated offset normally
-                        animatedOffsetInPx.value.roundToInt()
-                    },
+    // Keep the index that will be used to mark the initial position of the item when the dragging
+    // starts, making sure not to change it while the item is being dragged, as that would cause the
+    // pointerInput below to be reset, interrupting the dragging gesture. Once the item is dropped
+    // though, we will update the index to the current one so that the next dragging gesture works
+    // as expected.
+    var nextIndexWhenDragStarts by remember { mutableIntStateOf(currentIndex) }
+    LaunchedEffect(itemState.isBeingDragged, currentIndex) {
+        if (!itemState.isBeingDragged) {
+            nextIndexWhenDragStarts = currentIndex
+        }
+    }
+
+    // Ensure the minimum horizontal swipe isn't zero to avoid division by zero errors
+    val adjustedMinSwipeHorizontality = minSwipeHorizontality?.takeUnless { it == 0f }
+
+    // Ensure the drag-and-drop handle modifier is ready before the item is drawn below.
+    val dragDropHandleModifier = if (
+        dragDropEnabled &&
+        !isUserDraggingAnotherItem &&
+        !itemState.isItemDismissedOrBeingDismissed
+    ) {
+        Modifier.pointerInput(
+            itemState,
+            listState,
+            nextIndexWhenDragStarts,
+            adjustedMinSwipeHorizontality,
+        ) {
+            awaitEachGesture {
+                handleDragDropGestures(
+                    itemState = itemState,
+                    listState = listState,
+                    indexWhenDragStarts = nextIndexWhenDragStarts,
+                    minSwipeHorizontality = adjustedMinSwipeHorizontality,
+                    onDragStart = { onDragStartState.value(it) },
+                    onDragUpdate = { onDragUpdateState.value(it) },
+                    onDragFinish = { onDragFinishState.value() },
                 )
             }
-            .zIndex(
-                zIndex = when {
-                    itemState.isBeingDragged -> 2f
-                    animatedOffsetInPxApplied -> 1f
-                    else -> 0f
+        }
+    } else {
+        Modifier
+    }
+
+    // Figure out which moves are possible so that we can set up keyboard reordering and the custom
+    // accessibility labels appropriately.
+    val moveActionsEnabled = keyboardReorderEnabled ||
+        moveUpActionLabel != null ||
+        moveDownActionLabel != null
+    val discreteReorderAvailable = moveActionsEnabled &&
+        dragDropEnabled &&
+        !isUserSwipingOrDragging &&
+        !itemState.isBeingDragged &&
+        !itemState.isBeingSwiped &&
+        !itemState.isItemDismissedOrBeingDismissed
+    val canMoveUp = discreteReorderAvailable && canMoveItemBy(-1)
+    val canMoveDown = discreteReorderAvailable && canMoveItemBy(1)
+    val moveActions = buildList {
+        if (moveUpActionLabel != null && canMoveUp) {
+            add(
+                CustomAccessibilityAction(label = moveUpActionLabel) {
+                    moveItemBy(-1)
                 },
             )
-            .then(
-                other = if (applyShadowElevationWhenDragged) {
-                    // Scale down before drawing the shadow to ensure the horizontal padding is
-                    // applied, then scale back up so that the final size of the item is unchanged.
-                    Modifier
-                        .scale(
-                            scaleX = shadowScaleX,
-                            scaleY = 1f,
-                        )
-                        .shadow(
-                            elevation = animatedShadowElevation,
-                            shape = shapes.containerBackgroundShape,
-                            clip = false,
-                        )
-                        .scale(
-                            scaleX = 1 / shadowScaleX,
-                            scaleY = 1f,
-                        )
-                } else {
-                    Modifier
+        }
+        if (moveDownActionLabel != null && canMoveDown) {
+            add(
+                CustomAccessibilityAction(label = moveDownActionLabel) {
+                    moveItemBy(1)
                 },
-            ),
-        state = itemState.swipeableItemState,
-        colors = colors.swipeableItemColors.copy(
-            containerBackgroundColor = animatedContainerBackgroundColor,
-        ),
-        shapes = shapes,
-        icons = icons,
-        minSwipeHorizontality = minSwipeHorizontality,
-        minHeight = max(minHeight, height),
-        contentStartPadding = contentStartPadding,
-        contentEndPadding = contentEndPadding,
-        clickIndication = clickIndication?.takeUnless { itemState.isBeingDragged },
-        onClick = onClick?.takeUnless { isUserSwipingOrDragging },
-        onLongClick = onLongClick?.takeUnless { isUserSwipingOrDragging },
-        onSwipeGestureStart = onSwipeGestureStart,
-        onSwipeGestureUpdate = onSwipeGestureUpdate,
-        onSwipeGestureFinish = onSwipeGestureFinish,
-        onSwipeDismiss = onSwipeDismiss,
-    ) {
-        // Ensure the drag-drop modifier is ready before the item is drawn, then draw the item
-        dragDropModifier = if (dragDropEnabled && !isUserDraggingAnotherItem) {
-            // Keep the index that will be used to mark the initial position of the item when the
-            // dragging starts, making sure not to change it while the item is being dragged, as
-            // that would cause the pointerInput below to be reset, interrupting the dragging gesture.
-            // Once the item is dropped though, we will update the index to the current one so that
-            // the next dragging gesture works as expected.
-            var nextIndexWhenDragStarts by remember { mutableIntStateOf(currentIndex) }
-            LaunchedEffect(itemState.isBeingDragged, currentIndex) {
-                if (!itemState.isBeingDragged) {
-                    nextIndexWhenDragStarts = currentIndex
+            )
+        }
+    }
+    val keyboardModifier = if (keyboardReorderEnabled && (canMoveUp || canMoveDown)) {
+        Modifier
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown || !event.isAltPressed) {
+                    false
+                } else {
+                    when (event.key) {
+                        Key.DirectionUp -> canMoveUp && moveItemBy(-1)
+                        Key.DirectionDown -> canMoveDown && moveItemBy(1)
+                        else -> false
+                    }
                 }
             }
+            .focusable()
+    } else {
+        Modifier
+    }
 
-            // Ensure the minimum horizontal swipe isn't zero to avoid division by zero errors
-            val adjustedMinSwipeHorizontality = minSwipeHorizontality?.takeUnless { it == 0f }
-
-            Modifier.pointerInput(
-                itemState,
-                nextIndexWhenDragStarts,
-                adjustedMinSwipeHorizontality,
-                onDragStart,
-                onDragUpdate,
-                onDragFinish,
-            ) {
-                awaitEachGesture {
-                    handleDragDropGestures(
-                        itemState = itemState,
-                        indexWhenDragStarts = nextIndexWhenDragStarts,
-                        minSwipeHorizontality = adjustedMinSwipeHorizontality,
-                        onDragStart = onDragStart,
-                        onDragUpdate = onDragUpdate,
-                        onDragFinish = onDragFinish,
+    CompositionLocalProvider(
+        LocalDragDropModifier provides dragDropHandleModifier,
+        LocalAdditionalCustomAccessibilityActions provides moveActions,
+    ) {
+        SwipeableItem(
+            modifier = modifier
+                .then(keyboardModifier)
+                .onSizeChanged {
+                    widthInPx = it.width.toFloat()
+                    height = with(localDensity) { it.height.toDp() }
+                }
+                .defaultMinSize(
+                    minHeight = minHeight,
+                )
+                .offset {
+                    IntOffset(
+                        x = 0,
+                        y = if (itemState.isBeingDragged && itemState.currentDragIndex == currentIndex) {
+                            // The user is dragging the item, so we want to apply the offset immediately
+                            // to ensure the user's pointer input is followed as quickly as possible and
+                            // without potential animation delays (even though we use "snap to" on the
+                            // offset animatable when the item is being dragged, there might be a tiny
+                            // delay before the "snap to" action is invoked at all, so here we just
+                            // reference the offset directly, as it is guaranteed to be up to date).
+                            itemState.offsetTargetInPx.roundToInt()
+                        } else {
+                            // Otherwise, just apply the animated offset normally
+                            animatedOffsetInPx.value.roundToInt()
+                        },
                     )
                 }
-            }
-        } else {
-            Modifier
-        }
-        content()
+                .zIndex(
+                    zIndex = when {
+                        itemState.isBeingDragged -> 2f
+                        animatedOffsetInPxApplied -> 1f
+                        else -> 0f
+                    },
+                )
+                .then(
+                    other = if (applyShadowElevationWhenDragged) {
+                        // Scale down before drawing the shadow to ensure the horizontal padding is
+                        // applied, then scale back up so that the final size of the item is unchanged.
+                        Modifier
+                            .scale(
+                                scaleX = shadowScaleX,
+                                scaleY = 1f,
+                            )
+                            .shadow(
+                                elevation = animatedShadowElevation,
+                                shape = shapes.containerBackgroundShape,
+                                clip = false,
+                            )
+                            .scale(
+                                scaleX = 1 / shadowScaleX,
+                                scaleY = 1f,
+                            )
+                    } else {
+                        Modifier
+                    },
+                ),
+            state = itemState.swipeableItemState,
+            colors = colors.swipeableItemColors.copy(
+                containerBackgroundColor = animatedContainerBackgroundColor,
+            ),
+            shapes = shapes,
+            icons = icons,
+            minSwipeHorizontality = minSwipeHorizontality,
+            minHeight = max(minHeight, height),
+            contentStartPadding = contentStartPadding,
+            contentEndPadding = contentEndPadding,
+            clickIndication = clickIndication?.takeUnless { itemState.isBeingDragged },
+            onClickLabel = onClickLabel,
+            onLongClickLabel = onLongClickLabel,
+            dismissLeftToRightActionLabel = dismissLeftToRightActionLabel,
+            dismissRightToLeftActionLabel = dismissRightToLeftActionLabel,
+            onClick = onClick?.takeUnless { isUserSwipingOrDragging },
+            onLongClick = onLongClick?.takeUnless { isUserSwipingOrDragging },
+            onSwipeGestureStart = { swipeDeltaInPx ->
+                // Publish swipe ownership before client code runs so list scrolling is disabled
+                // for the complete lifetime of the gesture.
+                listState.updateSwipedItemKeysIfNeeded(itemState.itemKey, isBeingSwiped = true)
+                onSwipeGestureStart(swipeDeltaInPx)
+            },
+            onSwipeGestureUpdate = onSwipeGestureUpdate,
+            onSwipeGestureFinish = {
+                // Release first because the callback below can remove this item from composition
+                listState.updateSwipedItemKeysIfNeeded(itemState.itemKey, isBeingSwiped = false)
+                onSwipeGestureFinish()
+            },
+            onSwipeDismiss = onSwipeDismiss,
+            content = content,
+        )
     }
 }
 
 private suspend fun AwaitPointerEventScope.handleDragDropGestures(
     itemState: DraggableSwipeableItemState,
+    listState: DragDropSwipeLazyColumnState,
     indexWhenDragStarts: Int,
     minSwipeHorizontality: Float?,
     onDragStart: (dragDeltaInPx: Float) -> Unit,
@@ -306,54 +423,74 @@ private suspend fun AwaitPointerEventScope.handleDragDropGestures(
         }
     }
 
-    // Detect the drag gesture by listening for the first touch event that goes over the slop
-    val down = awaitFirstDown()
-    var drag = awaitVerticalTouchSlopOrCancellation(pointerId = down.id) { potentialDrag, _ ->
-        val potentialDragDelta = potentialDrag.position.y - potentialDrag.previousPosition.y
-        val horizontalDelta = potentialDrag.position.x - potentialDrag.previousPosition.x
-        val verticalSlope = if (horizontalDelta != 0f) {
-            abs(potentialDragDelta / horizontalDelta)
-        } else {
-            Float.POSITIVE_INFINITY
-        }
-
-        // Ensure only somewhat vertical drags are considered valid, that way we avoid interfering
-        // with potential horizontal swipes and other gestures.
-        if (minSwipeHorizontality == null || verticalSlope >= (1f / minSwipeHorizontality)) {
-            down.consume()
-            itemState.update {
-                copy(
-                    isBeingDragged = true,
-                    currentDragIndex = indexWhenDragStarts,
-                )
+    var dragStarted = false
+    try {
+        // Detect the drag gesture by listening for the first touch event that goes over the slop.
+        val down = awaitFirstDown()
+        var drag = awaitVerticalTouchSlopOrCancellation(pointerId = down.id) { potentialDrag, _ ->
+            val potentialDragDelta = potentialDrag.position.y - potentialDrag.previousPosition.y
+            val horizontalDelta = potentialDrag.position.x - potentialDrag.previousPosition.x
+            val verticalSlope = if (horizontalDelta != 0f) {
+                abs(potentialDragDelta / horizontalDelta)
+            } else {
+                Float.POSITIVE_INFINITY
             }
-            handleDrag(potentialDrag)
-            onDragStart(potentialDragDelta)
-        }
-    }
 
-    // If we detect it, we need to keep listening for the rest of the drag gesture
-    while (drag?.pressed == true) {
-        drag = awaitVerticalDragOrCancellation(pointerId = drag.id)
-        drag?.let {
-            if (drag.pressed) {
+            // Claim the shared drag slot before changing the item's local state. This makes the
+            // decision atomic when two pointers cross touch slop in the same frame.
+            if (
+                (minSwipeHorizontality == null || verticalSlope >= (1f / minSwipeHorizontality)) &&
+                listState.updateDragItemKeyIfPossible(itemState.itemKey)
+            ) {
+                dragStarted = true
+                down.consume()
+                itemState.update {
+                    copy(
+                        isBeingDragged = true,
+                        currentDragIndex = indexWhenDragStarts,
+                    )
+                }
+                handleDrag(potentialDrag)
+                onDragStart(potentialDragDelta)
+            }
+        }
+
+        // If we detect it, keep listening while this gesture still owns the drag operation.
+        while (
+            dragStarted &&
+            drag?.pressed == true &&
+            itemState.isBeingDragged &&
+            listState.draggedItemKey == itemState.itemKey
+        ) {
+            drag = awaitVerticalDragOrCancellation(pointerId = drag.id)
+            if (
+                drag?.pressed == true &&
+                itemState.isBeingDragged &&
+                listState.draggedItemKey == itemState.itemKey
+            ) {
                 handleDrag(drag)
 
                 val dragDelta = drag.position.y - drag.previousPosition.y
                 onDragUpdate(dragDelta)
             }
         }
-    }
-
-    // Finally, the dragging has ended
-    if (itemState.isBeingDragged) {
-        itemState.update {
-            copy(
-                isBeingDragged = false,
-                currentDragIndex = null,
-                offsetTargetInPx = 0f,
-            )
+    } finally {
+        // pointerInput can be canceled by recomposition or by disposal, so we always release both
+        // the item-local state and the shared owner (i.e., the list state) to make sure that a
+        // canceled gesture disappears from the states entirely, otherwise we risk keeping the
+        // scrolling or other actions and/or gestures unavailable.
+        if (dragStarted && itemState.isBeingDragged) {
+            itemState.update {
+                copy(
+                    isBeingDragged = false,
+                    currentDragIndex = null,
+                    offsetTargetInPx = 0f,
+                )
+            }
+            listState.releaseDragItemKeyIfNeeded(itemState.itemKey)
+            onDragFinish()
+        } else if (dragStarted) {
+            listState.releaseDragItemKeyIfNeeded(itemState.itemKey)
         }
-        onDragFinish()
     }
 }

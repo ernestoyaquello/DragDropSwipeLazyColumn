@@ -1,0 +1,6 @@
+# Normalize text files to LF in Git and on checkout; leave binary files untouched.
+* text=auto eol=lf
+
+# Windows batch scripts use CRLF on checkout. Git still stores them as LF.
+*.bat text eol=crlf
+*.cmd text eol=crlf

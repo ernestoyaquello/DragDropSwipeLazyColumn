@@ -7,10 +7,9 @@ import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyScopeMarker
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import com.ernestoyaquello.dragdropswipelazycolumn.state.DragDropSwipeLazyColumnState
@@ -23,10 +22,10 @@ class DraggableSwipeableItemScope<TItem> internal constructor(
     internal val listState: DragDropSwipeLazyColumnState,
     internal val contentStartPadding: Dp,
     internal val contentEndPadding: Dp,
+    internal val canMoveItemBy: (indexDelta: Int) -> Boolean,
+    internal val moveItemBy: (indexDelta: Int) -> Boolean,
     internal val lazyItemScope: LazyItemScope,
 ) : LazyItemScope {
-
-    internal var dragDropModifier by mutableStateOf<Modifier>(Modifier)
 
     /**
      * This modifier should be applied to whatever element within the item will be used for the user
@@ -36,7 +35,15 @@ class DraggableSwipeableItemScope<TItem> internal constructor(
      * functionality, as it will do nothing by default whenever "dragDropEnabled" is set to false
      * within [DraggableSwipeableItem].
      */
-    fun Modifier.dragDropModifier() = then(dragDropModifier)
+    // Suppressing the Android Studio warning because it's wrong: LocalDragDropModifier.current
+    // is a Composable function, but Android Studio doesn't realize that for some reason.
+    @Suppress("UnnecessaryComposedModifier")
+    fun Modifier.dragDropModifier(): Modifier = composed {
+        // We resolve this when the handle is used, inside DraggableSwipeableItem's provider.
+        // If the modifier were prepared earlier, reading the local immediately would return its
+        // empty default and silently disable dragging.
+        then(LocalDragDropModifier.current)
+    }
 
     /**
      * This modifier animates the item appearance (fade in), disappearance (fade out) and placement
@@ -126,3 +133,9 @@ class DraggableSwipeableItemScope<TItem> internal constructor(
         @FloatRange(from = 0.0, to = 1.0) fraction: Float,
     ): Modifier = with(lazyItemScope) { fillParentMaxWidth(fraction) }
 }
+
+/**
+ * Carries the pointer-input modifier from [DraggableSwipeableItem] to the drag handle composed
+ * inside it.
+ */
+internal val LocalDragDropModifier = compositionLocalOf<Modifier> { Modifier }
