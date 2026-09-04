@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -56,12 +57,12 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlin.math.roundToInt
 
 /**
  * A wrapper for a [LazyColumn] or a [DragDropSwipeLazyColumn] that will enhance it with item reveal
- * animations and automatic scrolling to the last item when it is added to the list.
+ * animations and automatic scrolling to newly added list items.
  *
  * The reason why this even exists, apart from allowing us to improve the default item addition
  * animations with some extra customization, such as a slide-in animation, is that the default
@@ -79,6 +80,10 @@ import kotlin.math.roundToInt
  * @param state The [LazyListState] of the underlying lazy column.
  * @param items The items to be displayed within the lazy column.
  * @param key A function that returns a unique key for each item.
+ * @param onlyRevealItemsAddedAtTheEnd Determines if the only new items that will be revealed
+ *   through automatic scrolling when needed should be the ones added at the end of the list:
+ *   - If true, any new item added to the list will only be revealed if it is at the very end.
+ *   - If false, any new item added to the list will be revealed regardless of its position.
  * @param content The composable with the list, which will be provided with a `content.listModifier`
  *   and a `content.getItemModifier()`. These modifiers must be used for the enhancements to work.
  */
@@ -88,6 +93,7 @@ fun <TItem> LazyColumnEnhancingWrapper(
     state: LazyListState,
     items: ImmutableList<TItem>,
     key: (TItem) -> Any,
+    onlyRevealItemsAddedAtTheEnd: Boolean = true,
     content: @Composable (
         listModifier: Modifier,
         getItemModifier: @Composable (index: Int, item: TItem) -> Modifier,
@@ -197,7 +203,9 @@ fun <TItem> LazyColumnEnhancingWrapper(
                     .layout { measurable, constraints ->
                         val placeable = measurable.measure(constraints)
                         val scaledHeight = (placeable.height * itemRevealVerticalScale.value)
-                        layout(placeable.width, scaledHeight.roundToInt()) {
+                        // Keep the item in the lazy layout while its reveal animation starts.
+                        // A zero-height scroll target can be skipped before it has time to expand.
+                        layout(placeable.width, scaledHeight.roundToInt().coerceAtLeast(1)) {
                             placeable.placeWithLayer(0, 0) {
                                 alpha = itemRevealAlpha.value
                             }
@@ -219,22 +227,23 @@ fun <TItem> LazyColumnEnhancingWrapper(
         }
     }
 
-    // Ensure that, when a new item is added to the bottom of the list, causing it to be entirely
-    // hidden from view, we scroll to it.
-    EnsureNewItemAddedAtTheEndIsScrolledTo(
+    // Scroll to a newly added item, respecting whether only additions at the end should be revealed.
+    EnsureNewlyAddedItemIsScrolledTo(
         state = state,
         itemsState = itemsState,
         key = key,
+        onlyRevealItemsAddedAtTheEnd = onlyRevealItemsAddedAtTheEnd,
     )
 
     content(listModifier, getItemModifier)
 }
 
 @Composable
-private fun <TItem> EnsureNewItemAddedAtTheEndIsScrolledTo(
+private fun <TItem> EnsureNewlyAddedItemIsScrolledTo(
     state: LazyListState,
     itemsState: MutableState<ImmutableList<TItem>>,
     key: (TItem) -> Any,
+    onlyRevealItemsAddedAtTheEnd: Boolean,
 ) {
     val getItemKeys: (ImmutableList<TItem>) -> ImmutableList<Any> = remember(key) {
         { items -> items.map { key(it) }.toImmutableList() }
@@ -243,34 +252,59 @@ private fun <TItem> EnsureNewItemAddedAtTheEndIsScrolledTo(
         mutableStateOf(getItemKeys(itemsState.value))
     }
 
-    LaunchedEffect(state, itemsState, getItemKeys, itemKeysState) {
+    LaunchedEffect(state, itemsState, getItemKeys, itemKeysState, onlyRevealItemsAddedAtTheEnd) {
         snapshotFlow {
             itemsState.value to state.layoutInfo.totalItemsCount
         }
-            .filter { (items, totalItemsCount) ->
-                // Wait until all items are available in the layout
-                items.size == totalItemsCount
+            .filter { (newItems, currentLayoutTotalItemsCount) ->
+                // Wait until all items are available in the layout state
+                newItems.size == currentLayoutTotalItemsCount
             }
-            .map { (items, _) ->
-                getItemKeys(items)
-            }
-            .filter { itemKeys ->
-                // Ensure that only one new item was added, and that it was added at the end of the list
-                val wasNewItemAddedAtTheEnd = (itemKeys.size - itemKeysState.value.size) == 1 &&
-                    itemKeys.dropLast(1).toImmutableList() == itemKeysState.value
-
-                wasNewItemAddedAtTheEnd.also {
-                    if (!wasNewItemAddedAtTheEnd) {
-                        // The collection won't execute, but we still need to update the remembered keys
-                        itemKeysState.value = itemKeys
+            .mapNotNull { (newItems, _) ->
+                val newItemKeys = getItemKeys(newItems)
+                val indexOfItemToReveal = if ((newItemKeys.size - itemKeysState.value.size) == 1) {
+                    when {
+                        onlyRevealItemsAddedAtTheEnd -> {
+                            // If the item is expected at the end, verify that it is there indeed,
+                            // and that it is the only new item that has been added.
+                            if (newItemKeys.dropLast(1).toImmutableList() == itemKeysState.value) {
+                                newItemKeys.lastIndex
+                            } else {
+                                null
+                            }
+                        }
+                        else -> {
+                            // If the item is expected anywhere, verify that it is the only new item
+                            // that has been added.
+                            val itemKeysDiff = newItemKeys.toSet() - itemKeysState.value.toSet()
+                            if (itemKeysDiff.size == 1) {
+                                newItemKeys.indexOf(itemKeysDiff.first()).takeUnless { it == -1 }
+                            } else {
+                                null
+                            }
+                        }
                     }
+                } else {
+                    // The size difference between the old and the new list implies that the number
+                    // of added items, if any, is not exactly one, so there isn't an item to reveal.
+                    null
                 }
+
+                if (indexOfItemToReveal == null) {
+                    // The collection below won't execute, so we need to update the remembered keys
+                    // directly here.
+                    itemKeysState.value = newItemKeys
+                }
+
+                indexOfItemToReveal?.let { newItemKeys to it }
             }
-            .collect { itemKeys ->
+            .collect { (newItemKeys, indexOfItemToReveal) ->
+                // Wait for recomposition to ensure the scrolling will be successful.
+                withFrameNanos {}
                 try {
-                    state.animateScrollToItem(state.layoutInfo.totalItemsCount - 1)
+                    state.animateScrollToItem(indexOfItemToReveal)
                 } finally {
-                    itemKeysState.value = itemKeys
+                    itemKeysState.value = newItemKeys
                 }
             }
     }
