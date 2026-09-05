@@ -9,21 +9,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # needed for the Gradle SCM plugin
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Set up JDK & OSSRH creds
-        uses: actions/setup-java@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 19
-          server-id: ossrh
-          server-username: ${{ secrets.OSSRH_USERNAME }}
-          server-password: ${{ secrets.OSSRH_PASSWORD }}
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          # Ignore yes exiting on a closed pipe, but still fail if sdkmanager fails.
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 
       - name: Enable KVM
         run: |
